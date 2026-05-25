@@ -21,6 +21,18 @@ def make_openai_response(mocker, content: str):
     return response
 
 
+def mock_async_openai_create(mocker, response=None, side_effect=None):
+    """Patch AsyncOpenAI client and return an AsyncMock for chat.completions.create."""
+    mock_client = mocker.patch("openai.AsyncOpenAI").return_value
+    mock_create = mocker.AsyncMock()
+    if side_effect is not None:
+        mock_create.side_effect = side_effect
+    else:
+        mock_create.return_value = response
+    mock_client.chat.completions.create = mock_create
+    return mock_create
+
+
 # ---------------------------------------------------------------------------
 # MockAIPriorityService
 # ---------------------------------------------------------------------------
@@ -147,7 +159,7 @@ class TestOpenAIPriorityService:
     async def test_empty_api_key_returns_medium(self, mocker):
         # Without mock, a missing guard would still return MEDIUM via the exception handler.
         # Asserting OpenAI was never instantiated proves the guard short-circuits correctly.
-        mock_openai = mocker.patch("openai.OpenAI")
+        mock_openai = mocker.patch("openai.AsyncOpenAI")
         service = OpenAIPriorityService(api_key="")
         priority, reason = await service.suggest_priority("any task", None)
         assert priority == Priority.MEDIUM
@@ -164,15 +176,17 @@ class TestOpenAIPriorityService:
         key = module._build_cache_key("cached task", None)
         module._PRIORITY_CACHE[key] = (Priority.LOW, "from cache")
 
-        mock_openai = mocker.patch("openai.OpenAI")
+        mock_openai = mocker.patch("openai.AsyncOpenAI")
         result = await service.suggest_priority("cached task", None)
 
         mock_openai.assert_not_called()
         assert result == (Priority.LOW, "from cache")
 
     async def test_parses_high_priority_response(self, mocker, service):
-        mock_create = mocker.patch("openai.OpenAI").return_value.chat.completions.create
-        mock_create.return_value = make_openai_response(mocker, "PRIORITY: high\nREASON: Contains urgent deadline")
+        mock_create = mock_async_openai_create(
+            mocker,
+            response=make_openai_response(mocker, "PRIORITY: high\nREASON: Contains urgent deadline"),
+        )
 
         priority, reason = await service.suggest_priority("Fix bug", None)
 
@@ -180,8 +194,10 @@ class TestOpenAIPriorityService:
         assert reason == "Contains urgent deadline"
 
     async def test_parses_low_priority_response(self, mocker, service):
-        mock_create = mocker.patch("openai.OpenAI").return_value.chat.completions.create
-        mock_create.return_value = make_openai_response(mocker, "PRIORITY: low\nREASON: Optional cleanup task")
+        mock_create = mock_async_openai_create(
+            mocker,
+            response=make_openai_response(mocker, "PRIORITY: low\nREASON: Optional cleanup task"),
+        )
 
         priority, reason = await service.suggest_priority("Cleanup", None)
 
@@ -189,8 +205,10 @@ class TestOpenAIPriorityService:
         assert reason == "Optional cleanup task"
 
     async def test_parses_medium_priority_response(self, mocker, service):
-        mock_create = mocker.patch("openai.OpenAI").return_value.chat.completions.create
-        mock_create.return_value = make_openai_response(mocker, "PRIORITY: medium\nREASON: Routine task")
+        mock_create = mock_async_openai_create(
+            mocker,
+            response=make_openai_response(mocker, "PRIORITY: medium\nREASON: Routine task"),
+        )
 
         priority, reason = await service.suggest_priority("Daily standup", None)
 
@@ -198,16 +216,17 @@ class TestOpenAIPriorityService:
         assert reason == "Routine task"
 
     async def test_unknown_priority_value_defaults_to_medium(self, mocker, service):
-        mock_create = mocker.patch("openai.OpenAI").return_value.chat.completions.create
-        mock_create.return_value = make_openai_response(mocker, "PRIORITY: unknown\nREASON: something")
+        mock_create = mock_async_openai_create(
+            mocker,
+            response=make_openai_response(mocker, "PRIORITY: unknown\nREASON: something"),
+        )
 
         priority, _ = await service.suggest_priority("Some task", None)
 
         assert priority == Priority.MEDIUM
 
     async def test_empty_response_content_defaults_to_medium(self, mocker, service):
-        mock_create = mocker.patch("openai.OpenAI").return_value.chat.completions.create
-        mock_create.return_value = make_openai_response(mocker, "")
+        mock_create = mock_async_openai_create(mocker, response=make_openai_response(mocker, ""))
 
         priority, reason = await service.suggest_priority("Some task", None)
 
@@ -215,8 +234,7 @@ class TestOpenAIPriorityService:
         assert reason == "AI analysis completed"
 
     async def test_exception_returns_medium_none(self, mocker, service):
-        mock_create = mocker.patch("openai.OpenAI").return_value.chat.completions.create
-        mock_create.side_effect = RuntimeError("API down")
+        mock_create = mock_async_openai_create(mocker, side_effect=RuntimeError("API down"))
 
         priority, reason = await service.suggest_priority("Some task", None)
 
@@ -224,8 +242,7 @@ class TestOpenAIPriorityService:
         assert reason is None
 
     async def test_exception_result_stored_in_cache(self, mocker, service):
-        mock_create = mocker.patch("openai.OpenAI").return_value.chat.completions.create
-        mock_create.side_effect = RuntimeError("API down")
+        mock_create = mock_async_openai_create(mocker, side_effect=RuntimeError("API down"))
 
         await service.suggest_priority("Some task", None)
 
@@ -233,8 +250,10 @@ class TestOpenAIPriorityService:
         assert key in module._PRIORITY_CACHE
 
     async def test_description_included_in_api_content(self, mocker, service):
-        mock_create = mocker.patch("openai.OpenAI").return_value.chat.completions.create
-        mock_create.return_value = make_openai_response(mocker, "PRIORITY: medium\nREASON: ok")
+        mock_create = mock_async_openai_create(
+            mocker,
+            response=make_openai_response(mocker, "PRIORITY: medium\nREASON: ok"),
+        )
 
         await service.suggest_priority("Task", "some description")
 
@@ -243,16 +262,20 @@ class TestOpenAIPriorityService:
 
     async def test_client_lazy_initialized_on_first_call(self, mocker, service):
         assert service._client is None
-        mock_create = mocker.patch("openai.OpenAI").return_value.chat.completions.create
-        mock_create.return_value = make_openai_response(mocker, "PRIORITY: medium\nREASON: ok")
+        mock_create = mock_async_openai_create(
+            mocker,
+            response=make_openai_response(mocker, "PRIORITY: medium\nREASON: ok"),
+        )
 
         await service.suggest_priority("Task", None)
 
         assert service._client is not None
 
     async def test_result_cached_after_successful_call(self, mocker, service):
-        mock_create = mocker.patch("openai.OpenAI").return_value.chat.completions.create
-        mock_create.return_value = make_openai_response(mocker, "PRIORITY: high\nREASON: urgent")
+        mock_create = mock_async_openai_create(
+            mocker,
+            response=make_openai_response(mocker, "PRIORITY: high\nREASON: urgent"),
+        )
 
         await service.suggest_priority("Important task", None)
 
@@ -263,7 +286,7 @@ class TestOpenAIPriorityService:
 
     async def test_none_response_content_treated_as_empty(self, mocker, service):
         # response.choices[0].message.content = None is handled by `or ""`
-        mock_create = mocker.patch("openai.OpenAI").return_value.chat.completions.create
+        mock_create = mock_async_openai_create(mocker)
         response = mocker.MagicMock()
         response.choices[0].message.content = None
         mock_create.return_value = response
@@ -275,8 +298,10 @@ class TestOpenAIPriorityService:
 
     async def test_priority_line_with_no_value_defaults_to_medium(self, mocker, service):
         # "PRIORITY: " (blank after colon) — not in valid list → stays MEDIUM
-        mock_create = mocker.patch("openai.OpenAI").return_value.chat.completions.create
-        mock_create.return_value = make_openai_response(mocker, "PRIORITY: \nREASON: something")
+        mock_create = mock_async_openai_create(
+            mocker,
+            response=make_openai_response(mocker, "PRIORITY: \nREASON: something"),
+        )
 
         priority, _ = await service.suggest_priority("Some task", None)
 
@@ -284,9 +309,9 @@ class TestOpenAIPriorityService:
 
     async def test_reason_with_colon_preserved(self, mocker, service):
         # split(":", 1) ensures only the first colon is consumed
-        mock_create = mocker.patch("openai.OpenAI").return_value.chat.completions.create
-        mock_create.return_value = make_openai_response(
-            mocker, "PRIORITY: high\nREASON: fix: the production: issue"
+        mock_create = mock_async_openai_create(
+            mocker,
+            response=make_openai_response(mocker, "PRIORITY: high\nREASON: fix: the production: issue"),
         )
 
         _, reason = await service.suggest_priority("Some task", None)
@@ -295,8 +320,10 @@ class TestOpenAIPriorityService:
 
     async def test_response_with_no_priority_or_reason_lines(self, mocker, service):
         # Malformed response with no expected lines → defaults kick in
-        mock_create = mocker.patch("openai.OpenAI").return_value.chat.completions.create
-        mock_create.return_value = make_openai_response(mocker, "Sorry, I cannot help with that.")
+        mock_create = mock_async_openai_create(
+            mocker,
+            response=make_openai_response(mocker, "Sorry, I cannot help with that."),
+        )
 
         priority, reason = await service.suggest_priority("Some task", None)
 
@@ -305,9 +332,9 @@ class TestOpenAIPriorityService:
 
     async def test_client_reused_on_second_call(self, mocker, service):
         # OpenAI constructor must be called exactly once across two separate calls
-        mock_cls = mocker.patch("openai.OpenAI")
-        mock_cls.return_value.chat.completions.create.return_value = make_openai_response(
-            mocker, "PRIORITY: medium\nREASON: ok"
+        mock_cls = mocker.patch("openai.AsyncOpenAI")
+        mock_cls.return_value.chat.completions.create = mocker.AsyncMock(
+            return_value=make_openai_response(mocker, "PRIORITY: medium\nREASON: ok")
         )
 
         await service.suggest_priority("First task", None)
