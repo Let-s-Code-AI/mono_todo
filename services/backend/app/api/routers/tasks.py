@@ -5,10 +5,13 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session
 
-from app.api.deps import get_current_admin_user, get_current_user
-from app.core.config import settings
+from app.api.deps import (
+    get_ai_service,
+    get_current_admin_user,
+    get_current_user,
+    get_task_service,
+)
 from app.db.models import Category, Priority, Status, User
-from app.db.repository import TaskRepository
 from app.db.session import get_session
 from app.schemas.task import (
     PriorityAnalysisRequest,
@@ -18,11 +21,7 @@ from app.schemas.task import (
     TaskResponse,
     TaskUpdate,
 )
-from app.services.ai_priority_service import (
-    AIPriorityService,
-    MockAIPriorityService,
-    OpenAIPriorityService,
-)
+from app.services.ai_priority_service import AIPriorityService
 from app.services.task_service import TaskService
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -48,26 +47,6 @@ class TaskListParams:
         self.overdue = overdue
         self.skip = skip
         self.limit = limit
-
-
-def get_task_repository(session: Session = Depends(get_session)) -> TaskRepository:
-    """Dependency to get task repository."""
-    return TaskRepository(session)
-
-
-def get_ai_service() -> AIPriorityService:
-    """Dependency to get AI priority service."""
-    if settings.openai_api_key:
-        return OpenAIPriorityService(settings.openai_api_key)
-    return MockAIPriorityService()
-
-
-def get_task_service(
-    repository: TaskRepository = Depends(get_task_repository),
-    ai_service: AIPriorityService = Depends(get_ai_service),
-) -> TaskService:
-    """Dependency to get task service."""
-    return TaskService(repository, ai_service)
 
 
 def _get_category_name(category_id: Optional[int], session: Session) -> Optional[str]:
