@@ -61,7 +61,7 @@ jobs:
         run: pytest -v --tb=short --cov=app --cov-report=term-missing --cov-fail-under=80
 
       - name: Mutation testing
-        run: mutmut run --paths-to-mutate app
+        run: mutmut run
 
       - name: Clean up test DB
         if: always()
