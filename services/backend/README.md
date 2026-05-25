@@ -315,4 +315,5 @@ This is an MVP project for demonstration purposes.
 - Background task processing with Celery
 - Docker containerization
 - CI/CD pipeline
+- test
 
