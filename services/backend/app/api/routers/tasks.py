@@ -18,7 +18,11 @@ from app.schemas.task import (
     TaskResponse,
     TaskUpdate,
 )
-from app.services.ai_priority_service import MockAIPriorityService, OpenAIPriorityService
+from app.services.ai_priority_service import (
+    AIPriorityService,
+    MockAIPriorityService,
+    OpenAIPriorityService,
+)
 from app.services.task_service import TaskService
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -51,7 +55,7 @@ def get_task_repository(session: Session = Depends(get_session)) -> TaskReposito
     return TaskRepository(session)
 
 
-def get_ai_service() -> MockAIPriorityService | OpenAIPriorityService:
+def get_ai_service() -> AIPriorityService:
     """Dependency to get AI priority service."""
     if settings.openai_api_key:
         return OpenAIPriorityService(settings.openai_api_key)
@@ -60,7 +64,7 @@ def get_ai_service() -> MockAIPriorityService | OpenAIPriorityService:
 
 def get_task_service(
     repository: TaskRepository = Depends(get_task_repository),
-    ai_service: MockAIPriorityService | OpenAIPriorityService = Depends(get_ai_service),
+    ai_service: AIPriorityService = Depends(get_ai_service),
 ) -> TaskService:
     """Dependency to get task service."""
     return TaskService(repository, ai_service)
@@ -114,7 +118,7 @@ async def create_task(
 @router.post("/priority/analyze", response_model=PriorityAnalysisResponse)
 async def analyze_priority(
     payload: PriorityAnalysisRequest,
-    ai_service: MockAIPriorityService | OpenAIPriorityService = Depends(get_ai_service),
+    ai_service: AIPriorityService = Depends(get_ai_service),
     _: User = Depends(get_current_user),
 ) -> PriorityAnalysisResponse:
     """
