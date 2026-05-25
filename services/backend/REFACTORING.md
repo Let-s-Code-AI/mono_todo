@@ -1,5 +1,26 @@
 # Refactoring — backend
 
+## Status realizacji
+
+Wszystkie punkty z tej listy zostały zrealizowane na branchu `refactor`.
+
+- [x] 1. Importy wewnątrz metod (`repository.py`) — importy datetime są na górze pliku.
+- [x] 2. Nieużywany import (`tasks.py`) — usunięto `CategoryRepository`.
+- [x] 3. Martwa funkcja `_get_category_name` (`tasks.py`) — usunięta po przeniesieniu logiki do serwisu.
+- [x] 4. Walidacja kategorii w routerze zamiast w serwisie (`tasks.py`) — przeniesiona do `TaskService`.
+- [x] 5. Zły typ zwracany przez `get_ai_service` (`tasks.py`) — dependency typowane przez `AIPriorityService`.
+- [x] 6. Synchroniczny klient OpenAI w `async def` (`ai_priority_service.py`) — użyto `AsyncOpenAI` + `await`.
+- [x] 7. Dependencje serwisów w routerze zamiast w `deps.py` (`tasks.py`) — przeniesione do `app/api/deps.py`.
+
+## Powiązane commity (branch `refactor`)
+
+- `56646eb` — remove unused import + reuse helper
+- `dba68c0` — type AI dependency as protocol
+- `452d1e7` — move task dependencies to `app.api.deps`
+- `975422f` — move category validation to service layer
+- `48751fc` — switch OpenAI service to async client
+- `f2bbd89` — adapt tests to async OpenAI mocks
+
 ## 1. Importy wewnątrz metod (`repository.py`)
 
 `from datetime import timedelta` (linia 132) i `from datetime import datetime, timezone` (linia 146) są wewnątrz ciał metod. Powinny być na górze pliku.
