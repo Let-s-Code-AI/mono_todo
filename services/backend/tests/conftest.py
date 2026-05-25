@@ -63,7 +63,7 @@ def _auth_headers(user: User) -> dict:
 def client(test_engine, test_user):
     """Test client authenticated as a regular user."""
     from app.db.session import get_session
-    from app.api.routers.tasks import get_ai_service
+    from app.api.deps import get_ai_service
     from app.services.ai_priority_service import MockAIPriorityService
 
     def override_get_session():
@@ -87,7 +87,7 @@ def client(test_engine, test_user):
 def admin_client(test_engine, test_admin):
     """Test client authenticated as an admin user."""
     from app.db.session import get_session
-    from app.api.routers.tasks import get_ai_service
+    from app.api.deps import get_ai_service
     from app.services.ai_priority_service import MockAIPriorityService
 
     def override_get_session():
@@ -111,7 +111,7 @@ def admin_client(test_engine, test_admin):
 def unauth_client(test_engine):
     """Unauthenticated test client (for testing auth endpoints)."""
     from app.db.session import get_session
-    from app.api.routers.tasks import get_ai_service
+    from app.api.deps import get_ai_service
     from app.services.ai_priority_service import MockAIPriorityService
 
     def override_get_session():

@@ -433,7 +433,7 @@ def test_update_task_not_found(client: TestClient) -> None:
 
 def test_get_ai_service_returns_mock_when_no_key() -> None:
     """Test get_ai_service returns MockAIPriorityService when no API key is set."""
-    from app.api.routers.tasks import get_ai_service
+    from app.api.deps import get_ai_service
     from app.core import config
 
     original = config.settings.openai_api_key
@@ -447,7 +447,7 @@ def test_get_ai_service_returns_mock_when_no_key() -> None:
 
 def test_get_ai_service_returns_openai_when_key_set() -> None:
     """Test get_ai_service returns OpenAIPriorityService when API key is set."""
-    from app.api.routers.tasks import get_ai_service
+    from app.api.deps import get_ai_service
     from app.core import config
 
     original = config.settings.openai_api_key
