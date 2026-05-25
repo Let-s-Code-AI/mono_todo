@@ -1,6 +1,5 @@
 """Tests for task API endpoints."""
 
-from datetime import date, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
