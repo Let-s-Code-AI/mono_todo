@@ -52,13 +52,16 @@ jobs:
           cache-dependency-path: services/backend/requirements.txt
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt pytest-cov mutmut
 
       - name: Run migrations
         run: alembic upgrade head
 
-      - name: Run tests
-        run: pytest -v --tb=short
+      - name: Run tests with coverage
+        run: pytest -v --tb=short --cov=app --cov-report=term-missing --cov-fail-under=80
+
+      - name: Mutation testing
+        run: mutmut run --paths-to-mutate app
 
       - name: Clean up test DB
         if: always()
