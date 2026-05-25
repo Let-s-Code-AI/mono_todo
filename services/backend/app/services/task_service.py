@@ -8,6 +8,10 @@ from app.schemas.task import CategoryResponse, TaskCreate, TaskResponse, TaskUpd
 from app.services.ai_priority_service import AIPriorityService, MockAIPriorityService
 
 
+class CategoryNotFoundError(Exception):
+    """Raised when a referenced category does not exist."""
+
+
 class TaskService:
     """Service layer for task business logic."""
 
@@ -30,12 +34,20 @@ class TaskService:
         response = TaskResponse.model_validate(task)
         return response.model_copy(update={"category": category})
 
+    def _resolve_category_name(self, category_id: Optional[int]) -> Optional[str]:
+        """Resolve category name for a given ID, validating existence when provided."""
+        if category_id is None:
+            return None
+        category = self.repository.get_category(category_id)
+        if not category:
+            raise CategoryNotFoundError("Category not found")
+        return category.name
+
     async def create_task(
         self,
         task_data: TaskCreate,
         use_ai_priority: bool = False,
         owner_id: Optional[int] = None,
-        category_name: Optional[str] = None,
     ) -> Task:
         """
         Create a new task with optional AI-based prioritization.
@@ -44,11 +56,14 @@ class TaskService:
             task_data: Task creation data
             use_ai_priority: Whether to use AI category context for priority suggestion
             owner_id: ID of the owning user
-            category_name: Name of the assigned category (used by AI when use_ai_priority=True)
 
         Returns:
             Created task
+
+        Raises:
+            CategoryNotFoundError: If category_id is provided but does not exist
         """
+        category_name = self._resolve_category_name(task_data.category_id)
         user_priority = task_data.priority
 
         # Pass category hint and due_date to AI only when use_ai_priority is True
@@ -166,10 +181,16 @@ class TaskService:
 
         Returns:
             Updated task if found and accessible, None otherwise
+
+        Raises:
+            CategoryNotFoundError: If category_id is provided but does not exist
         """
         task = self.repository.get_by_id(task_id, owner_id=owner_id)
         if not task:
             return None
+
+        if task_data.category_id is not None:
+            self._resolve_category_name(task_data.category_id)
 
         update_data = task_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
