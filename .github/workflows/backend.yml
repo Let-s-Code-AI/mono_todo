@@ -1,7 +1,8 @@
-name: Backend CI
+name: Backend CI/CD
 
 on:
   push:
+    branches: [main, develop]
     paths:
       - "services/backend/**"
       - ".github/workflows/backend.yml"
@@ -9,57 +10,113 @@ on:
     paths:
       - "services/backend/**"
       - ".github/workflows/backend.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: backend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 defaults:
   run:
     working-directory: services/backend
 
+env:
+  PYTHON_VERSION: "3.11"
+  JWT_SECRET_KEY: ci-test-secret-not-for-production
+  DATABASE_URL: sqlite:///./test_todo.db
+
 jobs:
   lint:
-    name: Lint
+    name: Lint and format
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    timeout-minutes: 10
 
-      - uses: actions/setup-python@v5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
           cache-dependency-path: services/backend/requirements.txt
 
-      - name: Install dev tools
-        run: pip install ruff black
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff black
 
-      - name: ruff check
+      - name: Run Ruff
         run: ruff check .
 
-      - name: black check
+      - name: Check formatting with Black
         run: black --check .
 
   test:
     name: Tests
     runs-on: ubuntu-latest
-    env:
-      JWT_SECRET_KEY: ci-test-secret-not-for-production
-      DATABASE_URL: sqlite:///./test_todo.db
-    steps:
-      - uses: actions/checkout@v4
+    timeout-minutes: 15
 
-      - uses: actions/setup-python@v5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
           cache-dependency-path: services/backend/requirements.txt
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Run migrations
+      - name: Run database migrations
         run: alembic upgrade head
 
       - name: Run tests
-        run: pytest -v --tb=short
+        run: pytest -v --tb=short --junitxml=pytest-results.xml
 
-      - name: Clean up test DB
+      - name: Upload pytest report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-pytest-results
+          path: services/backend/pytest-results.xml
+          retention-days: 7
+
+      - name: Clean up test database
         if: always()
         run: rm -f test_todo.db
+
+  package:
+    name: Package backend source
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [lint, test]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create backend artifact
+        working-directory: .
+        run: |
+          tar \
+            --exclude='services/backend/.venv' \
+            --exclude='services/backend/__pycache__' \
+            --exclude='services/backend/.pytest_cache' \
+            --exclude='services/backend/*.db' \
+            -czf backend-source.tar.gz services/backend
+
+      - name: Upload backend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-source
+          path: backend-source.tar.gz
+          retention-days: 14

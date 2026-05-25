@@ -8,6 +8,10 @@ from app.schemas.task import CategoryResponse, TaskCreate, TaskResponse, TaskUpd
 from app.services.ai_priority_service import AIPriorityService, MockAIPriorityService
 
 
+class CategoryNotFoundError(Exception):
+    """Raised when a task references a category that does not exist."""
+
+
 class TaskService:
     """Service layer for task business logic."""
 
@@ -19,6 +23,16 @@ class TaskService:
         """Initialize task service with repository and optional AI service."""
         self.repository = repository
         self.ai_service = ai_service or MockAIPriorityService()
+
+    def _get_category_name(self, category_id: Optional[int]) -> Optional[str]:
+        """Validate a category ID and resolve its name."""
+        if category_id is None:
+            return None
+
+        category = self.repository.get_category(category_id)
+        if category is None:
+            raise CategoryNotFoundError
+        return category.name
 
     def to_response(self, task: Task) -> TaskResponse:
         """Build a TaskResponse, resolving the nested category object."""
@@ -35,7 +49,6 @@ class TaskService:
         task_data: TaskCreate,
         use_ai_priority: bool = False,
         owner_id: Optional[int] = None,
-        category_name: Optional[str] = None,
     ) -> Task:
         """
         Create a new task with optional AI-based prioritization.
@@ -44,12 +57,15 @@ class TaskService:
             task_data: Task creation data
             use_ai_priority: Whether to use AI category context for priority suggestion
             owner_id: ID of the owning user
-            category_name: Name of the assigned category (used by AI when use_ai_priority=True)
 
         Returns:
             Created task
+
+        Raises:
+            CategoryNotFoundError: If task_data.category_id references a missing category
         """
         user_priority = task_data.priority
+        category_name = self._get_category_name(task_data.category_id)
 
         # Pass category hint and due_date to AI only when use_ai_priority is True
         cat_hint = category_name if use_ai_priority else None
@@ -166,12 +182,18 @@ class TaskService:
 
         Returns:
             Updated task if found and accessible, None otherwise
+
+        Raises:
+            CategoryNotFoundError: If task_data.category_id references a missing category
         """
         task = self.repository.get_by_id(task_id, owner_id=owner_id)
         if not task:
             return None
 
         update_data = task_data.model_dump(exclude_unset=True)
+        if update_data.get("category_id") is not None:
+            self._get_category_name(update_data["category_id"])
+
         for field, value in update_data.items():
             setattr(task, field, value)
 
