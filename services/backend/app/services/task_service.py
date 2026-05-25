@@ -2,7 +2,9 @@
 
 from typing import Optional
 
-from app.db.models import Category, Priority, Status, Task
+from fastapi import HTTPException
+
+from app.db.models import Priority, Status, Task
 from app.db.repository import TaskRepository
 from app.schemas.task import CategoryResponse, TaskCreate, TaskResponse, TaskUpdate
 from app.services.ai_priority_service import AIPriorityService, MockAIPriorityService
@@ -30,12 +32,21 @@ class TaskService:
         response = TaskResponse.model_validate(task)
         return response.model_copy(update={"category": category})
 
+    def _resolve_category_name_or_404(self, category_id: Optional[int]) -> Optional[str]:
+        """Resolve category name from ID, raising 404 when category does not exist."""
+        if category_id is None:
+            return None
+
+        category = self.repository.get_category(category_id)
+        if not category:
+            raise HTTPException(status_code=404, detail="Category not found")
+        return category.name
+
     async def create_task(
         self,
         task_data: TaskCreate,
         use_ai_priority: bool = False,
         owner_id: Optional[int] = None,
-        category_name: Optional[str] = None,
     ) -> Task:
         """
         Create a new task with optional AI-based prioritization.
@@ -44,12 +55,12 @@ class TaskService:
             task_data: Task creation data
             use_ai_priority: Whether to use AI category context for priority suggestion
             owner_id: ID of the owning user
-            category_name: Name of the assigned category (used by AI when use_ai_priority=True)
 
         Returns:
             Created task
         """
         user_priority = task_data.priority
+        category_name = self._resolve_category_name_or_404(task_data.category_id)
 
         # Pass category hint and due_date to AI only when use_ai_priority is True
         cat_hint = category_name if use_ai_priority else None
@@ -172,6 +183,9 @@ class TaskService:
             return None
 
         update_data = task_data.model_dump(exclude_unset=True)
+        if "category_id" in update_data:
+            self._resolve_category_name_or_404(update_data["category_id"])
+
         for field, value in update_data.items():
             setattr(task, field, value)
 
