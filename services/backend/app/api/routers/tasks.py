@@ -8,7 +8,7 @@ from sqlmodel import Session
 from app.api.deps import get_current_admin_user, get_current_user
 from app.core.config import settings
 from app.db.models import Category, Priority, Status, User
-from app.db.repository import CategoryRepository, TaskRepository
+from app.db.repository import TaskRepository
 from app.db.session import get_session
 from app.schemas.task import (
     PriorityAnalysisRequest,
@@ -67,11 +67,13 @@ def get_task_service(
 
 
 def _get_category_name(category_id: Optional[int], session: Session) -> Optional[str]:
-    """Resolve category name from ID."""
+    """Resolve category name from ID, raising 404 when category does not exist."""
     if not category_id:
         return None
     category = session.get(Category, category_id)
-    return category.name if category else None
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    return category.name
 
 
 @router.post("/", response_model=TaskResponse, status_code=201)
@@ -98,13 +100,7 @@ async def create_task(
     Raises:
         HTTPException: 404 if category_id does not exist
     """
-    if task_data.category_id is not None:
-        category = session.get(Category, task_data.category_id)
-        if not category:
-            raise HTTPException(status_code=404, detail="Category not found")
-        category_name = category.name
-    else:
-        category_name = None
+    category_name = _get_category_name(task_data.category_id, session)
 
     task = await service.create_task(
         task_data,
@@ -282,10 +278,7 @@ async def update_task(
     Raises:
         HTTPException: If task not found or not owned by current user
     """
-    if task_data.category_id is not None:
-        category = session.get(Category, task_data.category_id)
-        if not category:
-            raise HTTPException(status_code=404, detail="Category not found")
+    _get_category_name(task_data.category_id, session)
 
     task = service.update_task(task_id, task_data, owner_id=current_user.id)
     if not task:
