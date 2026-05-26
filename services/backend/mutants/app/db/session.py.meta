@@ -1,9 +1,0 @@
-{
-    "exit_code_by_key": {
-        "app.db.session.x_get_session__mutmut_1": null,
-        "app.db.session.x_create_db_and_tables__mutmut_1": null
-    },
-    "durations_by_key": {},
-    "type_check_error_by_key": {},
-    "estimated_durations_by_key": {}
-}
