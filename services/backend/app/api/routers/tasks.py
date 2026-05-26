@@ -14,7 +14,10 @@ from app.schemas.task import (
     PriorityAnalysisRequest,
     PriorityAnalysisResponse,
     TagCreate,
+    TaskCommentCreate,
+    TaskCommentResponse,
     TaskCreate,
+    TaskHistoryResponse,
     TaskResponse,
     TaskUpdate,
 )
@@ -243,7 +246,7 @@ async def update_task(
     Raises:
         HTTPException: If task/category not found or not owned by current user
     """
-    task = service.update_task(task_id, task_data, owner_id=current_user.id)
+    task = service.update_task(task_id, task_data, owner_id=current_user.id, user_id=current_user.id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return service.to_response(task)
@@ -329,6 +332,86 @@ async def reanalyze_task_priority(
     if not updated_task:
         raise HTTPException(status_code=404, detail="Task not found")
     return service.to_response(updated_task)
+
+
+@router.get("/{task_id}/history", response_model=list[TaskHistoryResponse])
+def get_task_history(
+    task_id: int,
+    service: TaskService = Depends(get_task_service),
+    current_user: User = Depends(get_current_user),
+) -> list[TaskHistoryResponse]:
+    """
+    Get change history for a task (must belong to the authenticated user).
+
+    Args:
+        task_id: Task identifier
+        service: Task service dependency
+        current_user: Authenticated user
+
+    Returns:
+        List of change history entries
+
+    Raises:
+        HTTPException: If task not found or not owned by current user
+    """
+    history = service.get_task_history(task_id, owner_id=current_user.id)
+    if history is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return history
+
+
+@router.post("/{task_id}/comments", response_model=TaskCommentResponse, status_code=201)
+def add_comment(
+    task_id: int,
+    comment_data: TaskCommentCreate,
+    service: TaskService = Depends(get_task_service),
+    current_user: User = Depends(get_current_user),
+) -> TaskCommentResponse:
+    """
+    Add a comment to a task (must belong to the authenticated user).
+
+    Args:
+        task_id: Task identifier
+        comment_data: Comment content
+        service: Task service dependency
+        current_user: Authenticated user
+
+    Returns:
+        Created comment
+
+    Raises:
+        HTTPException: If task not found or not owned by current user
+    """
+    comment = service.add_comment(task_id, owner_id=current_user.id, user_id=current_user.id, content=comment_data.content)
+    if not comment:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return comment
+
+
+@router.get("/{task_id}/comments", response_model=list[TaskCommentResponse])
+def get_task_comments(
+    task_id: int,
+    service: TaskService = Depends(get_task_service),
+    current_user: User = Depends(get_current_user),
+) -> list[TaskCommentResponse]:
+    """
+    Get all comments for a task (must belong to the authenticated user).
+
+    Args:
+        task_id: Task identifier
+        service: Task service dependency
+        current_user: Authenticated user
+
+    Returns:
+        List of comments
+
+    Raises:
+        HTTPException: If task not found or not owned by current user
+    """
+    comments = service.get_task_comments(task_id, owner_id=current_user.id)
+    if comments is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return comments
 
 
 @router.delete("/{task_id}", status_code=204)

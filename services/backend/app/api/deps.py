@@ -66,7 +66,8 @@ def get_ai_service() -> AIPriorityService:
 
 def get_task_service(
     repository: TaskRepository = Depends(get_task_repository),
+    session: Session = Depends(get_session),
     ai_service: AIPriorityService = Depends(get_ai_service),
 ) -> TaskService:
     """Dependency to get task service."""
-    return TaskService(repository, ai_service)
+    return TaskService(repository, session, ai_service)

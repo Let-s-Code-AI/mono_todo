@@ -100,7 +100,27 @@ function TaskModal({ task, categories, onSave, onClose }) {
   const [aiLoading, setAiLoading] = useState(false)
   const [error, setError] = useState('')
   const [aiReason, setAiReason] = useState(task?.priority_reason ?? '')
+  const [activeTab, setActiveTab] = useState('form')
+  const [history, setHistory] = useState([])
+  const [comments, setComments] = useState([])
+  const [commentInput, setCommentInput] = useState('')
+  const [commentLoading, setCommentLoading] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
   const toast = useToast()
+
+  useEffect(() => {
+    if (isEdit && activeTab === 'history') {
+      setHistoryLoading(true)
+      api.getTaskHistory(task.id).then(setHistory).catch(() => setHistory([])).finally(() => setHistoryLoading(false))
+    }
+  }, [isEdit, task?.id, activeTab])
+
+  useEffect(() => {
+    if (isEdit && activeTab === 'comments') {
+      setHistoryLoading(true)
+      api.getTaskComments(task.id).then(setComments).catch(() => setComments([])).finally(() => setHistoryLoading(false))
+    }
+  }, [isEdit, task?.id, activeTab])
 
   async function analyzeAI() {
     if (!title.trim()) return
@@ -165,15 +185,41 @@ function TaskModal({ task, categories, onSave, onClose }) {
     }
   }
 
+  async function submitComment(e) {
+    e.preventDefault()
+    if (!commentInput.trim()) return
+    setCommentLoading(true)
+    try {
+      await api.addComment(task.id, commentInput.trim())
+      setCommentInput('')
+      const updated = await api.getTaskComments(task.id)
+      setComments(updated)
+      toast('Komentarz dodany', 'success')
+    } catch (err) {
+      toast('Błąd: ' + err.message, 'error')
+    } finally {
+      setCommentLoading(false)
+    }
+  }
+
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
+      <div className="modal" style={{ maxWidth: isEdit ? '600px' : '500px' }}>
         <div className="modal-header">
           <h2>{isEdit ? 'Edytuj zadanie' : 'Nowe zadanie'}</h2>
           <button className="icon-btn" onClick={onClose}>✕</button>
         </div>
+        {isEdit && (
+          <div className="modal-tabs">
+            <button className={`modal-tab ${activeTab === 'form' ? 'active' : ''}`} onClick={() => setActiveTab('form')}>Zadanie</button>
+            <button className={`modal-tab ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>Historia zmian</button>
+            <button className={`modal-tab ${activeTab === 'comments' ? 'active' : ''}`} onClick={() => setActiveTab('comments')}>Komentarze</button>
+          </div>
+        )}
         <div className="modal-body">
           {error && <div className="alert alert-error">{error}</div>}
+          {activeTab === 'form' && (
+          <>
           <div className="form-group">
             <label>Tytuł *</label>
             <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Co chcesz zrobić?" autoFocus />
@@ -246,13 +292,74 @@ function TaskModal({ task, categories, onSave, onClose }) {
               </label>
             )}
           </div>
+          </>
+          )}
+          {activeTab === 'history' && (
+            <div className="history-tab">
+              {historyLoading ? (
+                <div style={{ padding: '20px', textAlign: 'center' }}>Ładowanie…</div>
+              ) : history.length === 0 ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text2)' }}>Brak historii zmian</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {history.map(entry => (
+                    <div key={entry.id} className="history-entry" style={{ padding: '10px', borderLeft: '3px solid var(--accent)', backgroundColor: 'rgba(99,102,241,0.05)', borderRadius: '4px' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--text2)', marginBottom: '4px' }}>
+                        {new Date(entry.changed_at).toLocaleString('pl-PL')} • {entry.user_email}
+                      </div>
+                      <div style={{ fontSize: '13px' }}>
+                        <strong>{entry.field_name}:</strong> <span style={{ color: 'var(--text2)' }}>"{entry.old_value}"</span> → <span style={{ color: 'var(--accent)' }}>"{entry.new_value}"</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {activeTab === 'comments' && (
+            <div className="comments-tab">
+              {historyLoading ? (
+                <div style={{ padding: '20px', textAlign: 'center' }}>Ładowanie…</div>
+              ) : (
+                <>
+                  {comments.length === 0 ? (
+                    <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text2)' }}>Brak komentarzy</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
+                      {comments.map(comment => (
+                        <div key={comment.id} className="comment-item" style={{ padding: '12px', backgroundColor: 'rgba(99,102,241,0.05)', borderRadius: '6px' }}>
+                          <div style={{ fontSize: '12px', color: 'var(--text2)', marginBottom: '4px' }}>
+                            <strong>{comment.user_email}</strong> • {new Date(comment.created_at).toLocaleString('pl-PL')}
+                          </div>
+                          <div style={{ fontSize: '13px', lineHeight: '1.5' }}>{comment.content}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <form onSubmit={submitComment} style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
+                    <textarea
+                      value={commentInput}
+                      onChange={e => setCommentInput(e.target.value)}
+                      placeholder="Dodaj komentarz…"
+                      style={{ padding: '10px', borderRadius: '6px', border: '1px solid var(--border)', backgroundColor: 'var(--bg2)', color: 'var(--text)', fontFamily: 'inherit', resize: 'vertical', minHeight: '60px' }}
+                    />
+                    <button type="submit" className="btn btn-primary btn-sm" disabled={commentLoading || !commentInput.trim()}>
+                      {commentLoading ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Dodaj komentarz'}
+                    </button>
+                  </form>
+                </>
+              )}
+            </div>
+          )}
         </div>
-        <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose}>Anuluj</button>
-          <button className="btn btn-primary" onClick={submit} disabled={loading || !title.trim()}>
-            {loading ? <span className="spinner" style={{ width: 16, height: 16 }} /> : (isEdit ? 'Zapisz' : 'Dodaj zadanie')}
-          </button>
-        </div>
+        {activeTab === 'form' && (
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={onClose}>Anuluj</button>
+            <button className="btn btn-primary" onClick={submit} disabled={loading || !title.trim()}>
+              {loading ? <span className="spinner" style={{ width: 16, height: 16 }} /> : (isEdit ? 'Zapisz' : 'Dodaj zadanie')}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

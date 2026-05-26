@@ -1,12 +1,21 @@
 """Business logic layer for task operations."""
 
+import json
 from typing import Optional
 
 from fastapi import HTTPException
+from sqlmodel import Session
 
-from app.db.models import Priority, Status, Task
-from app.db.repository import TaskRepository
-from app.schemas.task import CategoryResponse, TaskCreate, TaskResponse, TaskUpdate
+from app.db.models import Priority, Status, Task, User
+from app.db.repository import TaskCommentRepository, TaskHistoryRepository, TaskRepository, UserRepository
+from app.schemas.task import (
+    CategoryResponse,
+    TaskCommentResponse,
+    TaskCreate,
+    TaskHistoryResponse,
+    TaskResponse,
+    TaskUpdate,
+)
 from app.services.ai_priority_service import AIPriorityService, MockAIPriorityService
 
 
@@ -16,10 +25,12 @@ class TaskService:
     def __init__(
         self,
         repository: TaskRepository,
+        session: Session,
         ai_service: Optional[AIPriorityService] = None,
     ) -> None:
-        """Initialize task service with repository and optional AI service."""
+        """Initialize task service with repository, session, and optional AI service."""
         self.repository = repository
+        self.session = session
         self.ai_service = ai_service or MockAIPriorityService()
 
     def to_response(self, task: Task) -> TaskResponse:
@@ -165,7 +176,7 @@ class TaskService:
         return self.repository.get_upcoming(days=days, owner_id=owner_id, skip=skip, limit=limit)
 
     def update_task(
-        self, task_id: int, task_data: TaskUpdate, owner_id: Optional[int] = None
+        self, task_id: int, task_data: TaskUpdate, owner_id: Optional[int] = None, user_id: Optional[int] = None
     ) -> Optional[Task]:
         """
         Update an existing task.
@@ -174,6 +185,7 @@ class TaskService:
             task_id: Task identifier
             task_data: Task update data
             owner_id: If set, only update the task if it belongs to this user
+            user_id: ID of the user making the change (for history tracking)
 
         Returns:
             Updated task if found and accessible, None otherwise
@@ -186,7 +198,17 @@ class TaskService:
         if "category_id" in update_data:
             self._resolve_category_name_or_404(update_data["category_id"])
 
+        history_repo = TaskHistoryRepository(self.session)
+        tracked_fields = {"title", "description", "priority", "status", "due_date", "category_id", "tags"}
+
         for field, value in update_data.items():
+            if field in tracked_fields and user_id:
+                old_value = getattr(task, field)
+                new_value = value
+                old_str = json.dumps(old_value) if field == "tags" else str(old_value)
+                new_str = json.dumps(new_value) if field == "tags" else str(new_value)
+                if old_str != new_str:
+                    history_repo.create(task_id, user_id, field, old_str, new_str)
             setattr(task, field, value)
 
         return self.repository.update(task)
@@ -264,3 +286,104 @@ class TaskService:
             True if deleted, False if not found or not accessible
         """
         return self.repository.delete(task_id, owner_id=owner_id)
+
+    def get_task_history(self, task_id: int, owner_id: Optional[int] = None) -> Optional[list[TaskHistoryResponse]]:
+        """
+        Get change history for a task.
+
+        Args:
+            task_id: Task identifier
+            owner_id: If set, only return history for tasks belonging to this user
+
+        Returns:
+            List of history entries or None if task not found
+        """
+        task = self.repository.get_by_id(task_id, owner_id=owner_id)
+        if not task:
+            return None
+
+        history_repo = TaskHistoryRepository(self.session)
+        history_entries = history_repo.get_by_task(task_id)
+        user_repo = UserRepository(self.session)
+
+        result = []
+        for entry in history_entries:
+            user = user_repo.get_by_id(entry.user_id)
+            response = TaskHistoryResponse(
+                id=entry.id,
+                task_id=entry.task_id,
+                user_id=entry.user_id,
+                user_email=user.email if user else "unknown",
+                field_name=entry.field_name,
+                old_value=entry.old_value,
+                new_value=entry.new_value,
+                changed_at=entry.changed_at,
+            )
+            result.append(response)
+        return result
+
+    def add_comment(
+        self, task_id: int, owner_id: Optional[int], user_id: int, content: str
+    ) -> Optional[TaskCommentResponse]:
+        """
+        Add a comment to a task.
+
+        Args:
+            task_id: Task identifier
+            owner_id: If set, only allow comments on tasks belonging to this user
+            user_id: ID of the user adding the comment
+            content: Comment text
+
+        Returns:
+            Created comment response or None if task not found
+        """
+        task = self.repository.get_by_id(task_id, owner_id=owner_id)
+        if not task:
+            return None
+
+        comment_repo = TaskCommentRepository(self.session)
+        comment = comment_repo.create(task_id, user_id, content)
+        user_repo = UserRepository(self.session)
+        user = user_repo.get_by_id(user_id)
+
+        return TaskCommentResponse(
+            id=comment.id,
+            task_id=comment.task_id,
+            user_id=comment.user_id,
+            user_email=user.email if user else "unknown",
+            content=comment.content,
+            created_at=comment.created_at,
+        )
+
+    def get_task_comments(self, task_id: int, owner_id: Optional[int] = None) -> Optional[list[TaskCommentResponse]]:
+        """
+        Get all comments for a task.
+
+        Args:
+            task_id: Task identifier
+            owner_id: If set, only return comments for tasks belonging to this user
+
+        Returns:
+            List of comments or None if task not found
+        """
+        task = self.repository.get_by_id(task_id, owner_id=owner_id)
+        if not task:
+            return None
+
+        comment_repo = TaskCommentRepository(self.session)
+        comments = comment_repo.get_by_task(task_id)
+        user_repo = UserRepository(self.session)
+
+        result = []
+        for comment in comments:
+            user = user_repo.get_by_id(comment.user_id)
+            response = TaskCommentResponse(
+                id=comment.id,
+                task_id=comment.task_id,
+                user_id=comment.user_id,
+                user_email=user.email if user else "unknown",
+                content=comment.content,
+                created_at=comment.created_at,
+            )
+            result.append(response)
+        return result

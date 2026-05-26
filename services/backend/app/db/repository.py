@@ -6,7 +6,7 @@ from typing import Optional
 from sqlalchemy import func, text
 from sqlmodel import Session, select
 
-from app.db.models import Category, Priority, Status, Task, User
+from app.db.models import Category, Priority, Status, Task, TaskComment, TaskHistory, User
 
 
 class UserRepository:
@@ -174,3 +174,58 @@ class TaskRepository:
             self.session.commit()
             return True
         return False
+
+
+class TaskHistoryRepository:
+    """Repository for task history tracking."""
+
+    def __init__(self, session: Session) -> None:
+        """Initialize repository with database session."""
+        self.session = session
+
+    def create(
+        self,
+        task_id: int,
+        user_id: int,
+        field_name: str,
+        old_value: Optional[str],
+        new_value: Optional[str],
+    ) -> TaskHistory:
+        """Create a new history entry."""
+        history = TaskHistory(
+            task_id=task_id,
+            user_id=user_id,
+            field_name=field_name,
+            old_value=old_value,
+            new_value=new_value,
+        )
+        self.session.add(history)
+        self.session.commit()
+        self.session.refresh(history)
+        return history
+
+    def get_by_task(self, task_id: int) -> list[TaskHistory]:
+        """Get all history entries for a task, ordered by date."""
+        statement = select(TaskHistory).where(TaskHistory.task_id == task_id).order_by(TaskHistory.changed_at)
+        return list(self.session.exec(statement).all())
+
+
+class TaskCommentRepository:
+    """Repository for task comments."""
+
+    def __init__(self, session: Session) -> None:
+        """Initialize repository with database session."""
+        self.session = session
+
+    def create(self, task_id: int, user_id: int, content: str) -> TaskComment:
+        """Create a new comment."""
+        comment = TaskComment(task_id=task_id, user_id=user_id, content=content)
+        self.session.add(comment)
+        self.session.commit()
+        self.session.refresh(comment)
+        return comment
+
+    def get_by_task(self, task_id: int) -> list[TaskComment]:
+        """Get all comments for a task, ordered by date."""
+        statement = select(TaskComment).where(TaskComment.task_id == task_id).order_by(TaskComment.created_at)
+        return list(self.session.exec(statement).all())

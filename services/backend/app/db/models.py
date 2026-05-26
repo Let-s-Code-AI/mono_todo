@@ -58,3 +58,29 @@ class Task(SQLModel, table=True):
     due_date: Optional[date] = Field(default=None)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class TaskHistory(SQLModel, table=True):
+    """Task change history tracking."""
+
+    __tablename__ = "taskhistory"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    task_id: int = Field(foreign_key="task.id", index=True)
+    user_id: int = Field(foreign_key="user.id")
+    field_name: str = Field(max_length=100)
+    old_value: Optional[str] = Field(default=None, max_length=1000)
+    new_value: Optional[str] = Field(default=None, max_length=1000)
+    changed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class TaskComment(SQLModel, table=True):
+    """Task comments for discussion and notes."""
+
+    __tablename__ = "taskcomment"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    task_id: int = Field(foreign_key="task.id", index=True)
+    user_id: int = Field(foreign_key="user.id")
+    content: str = Field(max_length=2000)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

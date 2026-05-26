@@ -97,6 +97,18 @@ export const api = {
     return request('GET', '/tasks/upcoming', null, { days })
   },
 
+  getTaskHistory(taskId) {
+    return request('GET', `/tasks/${taskId}/history`)
+  },
+
+  getTaskComments(taskId) {
+    return request('GET', `/tasks/${taskId}/comments`)
+  },
+
+  addComment(taskId, content) {
+    return request('POST', `/tasks/${taskId}/comments`, { content })
+  },
+
   // Categories
   getCategories() {
     // There's no GET /categories in the API, but we'll cache from tasks
