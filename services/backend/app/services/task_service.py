@@ -278,9 +278,7 @@ class TaskService:
         """
         return self.repository.delete(task_id, owner_id=owner_id)
 
-    def get_task_history(
-        self, task_id: int, owner_id: Optional[int] = None
-    ) -> Optional[list]:
+    def get_task_history(self, task_id: int, owner_id: Optional[int] = None) -> Optional[list]:
         """
         Get change history for a task.
 
@@ -321,9 +319,7 @@ class TaskService:
         comment = Comment(task_id=task_id, author_id=author_id, content=content)
         return self.comment_repository.create(comment)
 
-    def get_comments(
-        self, task_id: int, owner_id: Optional[int] = None
-    ) -> Optional[list]:
+    def get_comments(self, task_id: int, owner_id: Optional[int] = None) -> Optional[list]:
         """
         Get all comments on a task.
 

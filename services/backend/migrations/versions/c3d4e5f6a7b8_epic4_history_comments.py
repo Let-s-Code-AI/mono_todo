@@ -5,14 +5,14 @@ Revises: b2c3d4e5f6a7
 Create Date: 2026-05-26 12:00:00.000000
 
 """
+
 from typing import Union
 
 from alembic import op
 from sqlalchemy import text
 
-
-revision: str = 'c3d4e5f6a7b8'
-down_revision: Union[str, None] = 'b2c3d4e5f6a7'
+revision: str = "c3d4e5f6a7b8"
+down_revision: Union[str, None] = "b2c3d4e5f6a7"
 branch_labels = None
 depends_on = None
 
@@ -32,12 +32,12 @@ def upgrade() -> None:
             changed_at  DATETIME NOT NULL
         )
     """))
-    bind.execute(text(
-        "CREATE INDEX IF NOT EXISTS ix_taskhistory_task_id ON taskhistory (task_id)"
-    ))
-    bind.execute(text(
-        "CREATE INDEX IF NOT EXISTS ix_taskhistory_changed_by_id ON taskhistory (changed_by_id)"
-    ))
+    bind.execute(text("CREATE INDEX IF NOT EXISTS ix_taskhistory_task_id ON taskhistory (task_id)"))
+    bind.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_taskhistory_changed_by_id ON taskhistory (changed_by_id)"
+        )
+    )
 
     # Create comment table
     bind.execute(text("""
@@ -49,12 +49,8 @@ def upgrade() -> None:
             created_at  DATETIME NOT NULL
         )
     """))
-    bind.execute(text(
-        "CREATE INDEX IF NOT EXISTS ix_comment_task_id ON comment (task_id)"
-    ))
-    bind.execute(text(
-        "CREATE INDEX IF NOT EXISTS ix_comment_author_id ON comment (author_id)"
-    ))
+    bind.execute(text("CREATE INDEX IF NOT EXISTS ix_comment_task_id ON comment (task_id)"))
+    bind.execute(text("CREATE INDEX IF NOT EXISTS ix_comment_author_id ON comment (author_id)"))
 
 
 def downgrade() -> None:

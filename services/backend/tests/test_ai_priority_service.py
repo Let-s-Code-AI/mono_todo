@@ -243,7 +243,9 @@ class TestOpenAIPriorityService:
 
     async def test_description_included_in_api_content(self, mocker, service):
         mock_client = mocker.MagicMock()
-        mock_create = AsyncMock(return_value=make_openai_response(mocker, "PRIORITY: medium\nREASON: ok"))
+        mock_create = AsyncMock(
+            return_value=make_openai_response(mocker, "PRIORITY: medium\nREASON: ok")
+        )
         mock_client.chat.completions.create = mock_create
         mocker.patch("openai.AsyncOpenAI", return_value=mock_client)
 

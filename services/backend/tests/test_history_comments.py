@@ -48,9 +48,7 @@ class TestTaskHistory:
         test_db.commit()
         test_db.refresh(task)
 
-        response = client.patch(
-            f"/tasks/{task.id}", json={"title": "Nowy tytuł"}
-        )
+        response = client.patch(f"/tasks/{task.id}", json={"title": "Nowy tytuł"})
         assert response.status_code == 200
 
         history_response = client.get(f"/tasks/{task.id}/history")
@@ -267,9 +265,7 @@ class TestTaskComments:
         test_db.commit()
         test_db.refresh(task)
 
-        response = client.post(
-            f"/tasks/{task.id}/comments", json={"content": "Great task!"}
-        )
+        response = client.post(f"/tasks/{task.id}/comments", json={"content": "Great task!"})
         assert response.status_code == 201
         data = response.json()
         assert data["task_id"] == task.id
@@ -299,9 +295,7 @@ class TestTaskComments:
         test_db.commit()
         test_db.refresh(task)
 
-        response = client.post(
-            f"/tasks/{task.id}/comments", json={"content": "My comment"}
-        )
+        response = client.post(f"/tasks/{task.id}/comments", json={"content": "My comment"})
         assert response.status_code == 201
         data = response.json()
         assert data["author_id"] == test_user.id

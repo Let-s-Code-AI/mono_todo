@@ -10,7 +10,13 @@ from alembic import context
 from sqlmodel import SQLModel
 
 from app.core.config import settings
-from app.db.models import Category, Comment, Task, TaskHistory, User  # noqa: F401 — ensure all tables are registered
+from app.db.models import (
+    Category,
+    Comment,
+    Task,
+    TaskHistory,
+    User,
+)  # noqa: F401 — ensure all tables are registered
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -86,4 +92,3 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
-

@@ -110,7 +110,9 @@ class TaskRepository:
             statement = statement.where(Task.category_id == category_id)
         if tag is not None:
             statement = statement.where(
-                text("EXISTS (SELECT 1 FROM json_each(task.tags) WHERE value = :tag_val)").bindparams(tag_val=tag)
+                text(
+                    "EXISTS (SELECT 1 FROM json_each(task.tags) WHERE value = :tag_val)"
+                ).bindparams(tag_val=tag)
             )
         if overdue:
             today = date.today()
@@ -152,14 +154,16 @@ class TaskRepository:
         if changes and changed_by_id is not None:
             now = datetime.now(timezone.utc)
             for field_name, (old_val, new_val) in changes.items():
-                self.session.add(TaskHistory(
-                    task_id=task.id,
-                    changed_by_id=changed_by_id,
-                    field_name=field_name,
-                    old_value=old_val,
-                    new_value=new_val,
-                    changed_at=now,
-                ))
+                self.session.add(
+                    TaskHistory(
+                        task_id=task.id,
+                        changed_by_id=changed_by_id,
+                        field_name=field_name,
+                        old_value=old_val,
+                        new_value=new_val,
+                        changed_at=now,
+                    )
+                )
         self.session.commit()
         self.session.refresh(task)
         return task
@@ -215,8 +219,6 @@ class CommentRepository:
     def get_by_task(self, task_id: int) -> list[Comment]:
         """Get all comments for a task, oldest first."""
         statement = (
-            select(Comment)
-            .where(Comment.task_id == task_id)
-            .order_by(Comment.created_at.asc())
+            select(Comment).where(Comment.task_id == task_id).order_by(Comment.created_at.asc())
         )
         return list(self.session.exec(statement).all())

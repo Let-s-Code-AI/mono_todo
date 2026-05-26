@@ -80,4 +80,3 @@ class Comment(SQLModel, table=True):
     author_id: int = Field(foreign_key="user.id", index=True)
     content: str = Field(max_length=5000)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
