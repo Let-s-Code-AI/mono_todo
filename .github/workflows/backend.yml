@@ -58,7 +58,7 @@ jobs:
         run: alembic upgrade head
 
       - name: Run tests
-        run: pytest -v --tb=short
+        run: pytest -v --tb=short --cov=. --cov-fail-under=80
 
       - name: Clean up test DB
         if: always()
@@ -83,7 +83,7 @@ jobs:
         run: pip install -r requirements.txt mutmut
 
       - name: Run mutations tests
-        run: mutmut run --tests-dir tests --paths-to-mutate . --no-cov
+        run: mutmut run --tests-dir tests --paths-to-mutate . --no-cov --fail-under 80
 
       - name: Get mutation score
         if: always()
