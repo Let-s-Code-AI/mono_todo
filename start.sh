@@ -5,6 +5,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$ROOT_DIR/services/backend"
 FRONTEND_DIR="$ROOT_DIR/services/frontend"
+MCP_SERVER_DIR="$ROOT_DIR/services/mcp_server"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 info()  { echo -e "${BLUE}[INFO]${NC}  $*"; }
@@ -23,6 +24,7 @@ if [[ ! -d "$FRONTEND_DIR/node_modules" ]]; then
   error "Frontend not installed. Run ./install.sh first."
   exit 1
 fi
+
 
 if [[ ! -f "$BACKEND_DIR/.env" ]]; then
   error ".env missing. Run ./install.sh to generate it."
@@ -85,6 +87,18 @@ FRONTEND_PID=$!
 echo "$FRONTEND_PID" >> "$PIDS_FILE"
 ok "Frontend PID $FRONTEND_PID"
 
+# ── MCP Server ────────────────────────────────────────────────────────────────
+
+info "Starting MCP server..."
+(
+  cd "$MCP_SERVER_DIR"
+  source "$BACKEND_DIR/.venv/bin/activate"
+  python main.py 2>&1 | sed 's/^/[mcp_server] /'
+) &
+MCP_SERVER_PID=$!
+echo "$MCP_SERVER_PID" >> "$PIDS_FILE"
+ok "MCP Server PID $MCP_SERVER_PID"
+
 # ── Ready ─────────────────────────────────────────────────────────────────────
 
 echo ""
@@ -92,9 +106,10 @@ echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━
 echo -e "${GREEN}  All services running  (Ctrl+C to stop)${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo "    Frontend:  http://localhost:5173"
-echo "    Backend:   http://localhost:8000"
-echo "    API docs:  http://localhost:8000/docs"
+echo "    Frontend:   http://localhost:5173"
+echo "    Backend:    http://localhost:8000"
+echo "    API docs:   http://localhost:8000/docs"
+echo "    MCP Server: running (stdio)"
 echo ""
 
 wait

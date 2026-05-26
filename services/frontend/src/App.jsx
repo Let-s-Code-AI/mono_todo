@@ -100,7 +100,67 @@ function TaskModal({ task, categories, onSave, onClose }) {
   const [aiLoading, setAiLoading] = useState(false)
   const [error, setError] = useState('')
   const [aiReason, setAiReason] = useState(task?.priority_reason ?? '')
+  const [tab, setTab] = useState('edit') // 'edit' | 'history' | 'comments'
+  const [history, setHistory] = useState(null)
+  const [comments, setComments] = useState(null)
+  const [commentText, setCommentText] = useState('')
+  const [commentLoading, setCommentLoading] = useState(false)
   const toast = useToast()
+
+  const FIELD_LABELS = {
+    title: 'Tytuł',
+    description: 'Opis',
+    priority: 'Priorytet',
+    status: 'Status',
+    category_id: 'Kategoria',
+    due_date: 'Termin',
+  }
+
+  function formatDate(iso) {
+    const d = new Date(iso)
+    const day = d.getDate()
+    const month = d.toLocaleDateString('pl-PL', { month: 'short' }).slice(0, 3)
+    const year = d.getFullYear()
+    const hour = String(d.getHours()).padStart(2, '0')
+    const min = String(d.getMinutes()).padStart(2, '0')
+    return `${day} ${month} ${year}, ${hour}:${min}`
+  }
+
+  async function switchTab(t) {
+    setTab(t)
+    if (t === 'history' && history === null) {
+      try {
+        const data = await api.getTaskHistory(task.id)
+        setHistory(data)
+      } catch (err) {
+        toast(err.message, 'error')
+      }
+    }
+    if (t === 'comments' && comments === null) {
+      try {
+        const data = await api.getTaskComments(task.id)
+        setComments(data)
+      } catch (err) {
+        toast(err.message, 'error')
+      }
+    }
+  }
+
+  async function submitComment() {
+    if (!commentText.trim()) return
+    setCommentLoading(true)
+    try {
+      await api.addComment(task.id, commentText.trim())
+      setCommentText('')
+      const data = await api.getTaskComments(task.id)
+      setComments(data)
+      toast('Komentarz dodany', 'success')
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setCommentLoading(false)
+    }
+  }
 
   async function analyzeAI() {
     if (!title.trim()) return
@@ -172,87 +232,152 @@ function TaskModal({ task, categories, onSave, onClose }) {
           <h2>{isEdit ? 'Edytuj zadanie' : 'Nowe zadanie'}</h2>
           <button className="icon-btn" onClick={onClose}>✕</button>
         </div>
+        {isEdit && (
+          <div className="modal-tabs">
+            <button className={`modal-tab ${tab === 'edit' ? 'active' : ''}`} onClick={() => switchTab('edit')}>Edycja</button>
+            <button className={`modal-tab ${tab === 'history' ? 'active' : ''}`} onClick={() => switchTab('history')}>Historia</button>
+            <button className={`modal-tab ${tab === 'comments' ? 'active' : ''}`} onClick={() => switchTab('comments')}>Komentarze</button>
+          </div>
+        )}
         <div className="modal-body">
           {error && <div className="alert alert-error">{error}</div>}
-          <div className="form-group">
-            <label>Tytuł *</label>
-            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Co chcesz zrobić?" autoFocus />
-          </div>
-          <div className="form-group">
-            <label>Opis</label>
-            <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Opcjonalny opis…" />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div className="form-group">
-              <label>Priorytet</label>
-              <select value={priority} onChange={e => setPriority(e.target.value)}>
-                <option value="low">Niski</option>
-                <option value="medium">Średni</option>
-                <option value="high">Wysoki</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label>Status</label>
-              <select value={status} onChange={e => setStatus(e.target.value)}>
-                <option value="todo">Do zrobienia</option>
-                <option value="done">Zrobione</option>
-              </select>
-            </div>
-          </div>
-          <div className="form-group">
-            <label>Termin wykonania</label>
-            <input type="date" ref={dueDateRef} defaultValue={task?.due_date?.slice(0, 10) ?? ''} />
-          </div>
-          <div className="form-group">
-            <label>Kategoria</label>
-            <select value={categoryId} onChange={e => setCategoryId(e.target.value)}>
-              <option value="">Brak kategorii</option>
-              {categories.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group">
-            <label>Tagi (Enter aby dodać)</label>
-            <div className="tags-container" onClick={e => e.currentTarget.querySelector('input').focus()}>
-              {tags.map(t => (
-                <span key={t} className="tag-chip">
-                  #{t}
-                  <button type="button" onClick={() => setTags(tags.filter(x => x !== t))}>×</button>
-                </span>
-              ))}
-              <input
-                className="tag-input"
-                value={tagInput}
-                onChange={e => setTagInput(e.target.value)}
-                onKeyDown={handleTagKey}
-                placeholder={tags.length ? '' : 'np. praca, dom…'}
-              />
-            </div>
-          </div>
-          {aiReason && (
-            <div className="priority-reason">
-              <span className="ai-badge">✦ AI</span> {aiReason}
+          {tab === 'edit' && (
+            <>
+              <div className="form-group">
+                <label>Tytuł *</label>
+                <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Co chcesz zrobić?" autoFocus />
+              </div>
+              <div className="form-group">
+                <label>Opis</label>
+                <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Opcjonalny opis…" />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="form-group">
+                  <label>Priorytet</label>
+                  <select value={priority} onChange={e => setPriority(e.target.value)}>
+                    <option value="low">Niski</option>
+                    <option value="medium">Średni</option>
+                    <option value="high">Wysoki</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Status</label>
+                  <select value={status} onChange={e => setStatus(e.target.value)}>
+                    <option value="todo">Do zrobienia</option>
+                    <option value="done">Zrobione</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Termin wykonania</label>
+                <input type="date" ref={dueDateRef} defaultValue={task?.due_date?.slice(0, 10) ?? ''} />
+              </div>
+              <div className="form-group">
+                <label>Kategoria</label>
+                <select value={categoryId} onChange={e => setCategoryId(e.target.value)}>
+                  <option value="">Brak kategorii</option>
+                  {categories.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Tagi (Enter aby dodać)</label>
+                <div className="tags-container" onClick={e => e.currentTarget.querySelector('input').focus()}>
+                  {tags.map(t => (
+                    <span key={t} className="tag-chip">
+                      #{t}
+                      <button type="button" onClick={() => setTags(tags.filter(x => x !== t))}>×</button>
+                    </span>
+                  ))}
+                  <input
+                    className="tag-input"
+                    value={tagInput}
+                    onChange={e => setTagInput(e.target.value)}
+                    onKeyDown={handleTagKey}
+                    placeholder={tags.length ? '' : 'np. praca, dom…'}
+                  />
+                </div>
+              </div>
+              {aiReason && (
+                <div className="priority-reason">
+                  <span className="ai-badge">✦ AI</span> {aiReason}
+                </div>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={analyzeAI} disabled={!title.trim() || aiLoading}>
+                  {aiLoading ? <span className="spinner" style={{ width: 14, height: 14 }} /> : '✦'} Sugestia AI
+                </button>
+                {!isEdit && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text2)', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={useAI} onChange={e => setUseAI(e.target.checked)} style={{ accentColor: 'var(--accent)' }} />
+                    Użyj AI przy zapisie
+                  </label>
+                )}
+              </div>
+            </>
+          )}
+          {tab === 'history' && (
+            <div className="history-list">
+              {history === null ? (
+                <div style={{ textAlign: 'center', padding: '20px 0' }}><span className="spinner" style={{ width: 24, height: 24 }} /></div>
+              ) : history.length === 0 ? (
+                <p className="empty-hint">Brak zmian.</p>
+              ) : (
+                history.map(h => (
+                  <div key={h.id} className="history-entry">
+                    <span className="history-field">{FIELD_LABELS[h.field_name] || h.field_name}</span>
+                    <span className="history-change">
+                      {h.old_value ?? <em>brak</em>} → {h.new_value ?? <em>brak</em>}
+                    </span>
+                    <span className="history-date">{formatDate(h.changed_at)}</span>
+                  </div>
+                ))
+              )}
             </div>
           )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={analyzeAI} disabled={!title.trim() || aiLoading}>
-              {aiLoading ? <span className="spinner" style={{ width: 14, height: 14 }} /> : '✦'} Sugestia AI
+          {tab === 'comments' && (
+            <div className="comments-panel">
+              <div className="comment-list">
+                {comments === null ? (
+                  <div style={{ textAlign: 'center', padding: '20px 0' }}><span className="spinner" style={{ width: 24, height: 24 }} /></div>
+                ) : comments.length === 0 ? (
+                  <p className="empty-hint">Brak komentarzy.</p>
+                ) : (
+                  comments.map(c => (
+                    <div key={c.id} className="comment-item">
+                      <div className="comment-meta">{formatDate(c.created_at)}</div>
+                      <div className="comment-content">{c.content}</div>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="comment-form">
+                <textarea
+                  value={commentText}
+                  onChange={e => setCommentText(e.target.value)}
+                  placeholder="Dodaj komentarz…"
+                  rows={3}
+                />
+                <button
+                  className="btn btn-primary btn-sm"
+                  disabled={!commentText.trim() || commentLoading}
+                  onClick={submitComment}
+                >
+                  {commentLoading ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Wyślij'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+        {tab === 'edit' && (
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={onClose}>Anuluj</button>
+            <button className="btn btn-primary" onClick={submit} disabled={loading || !title.trim()}>
+              {loading ? <span className="spinner" style={{ width: 16, height: 16 }} /> : (isEdit ? 'Zapisz' : 'Dodaj zadanie')}
             </button>
-            {!isEdit && (
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text2)', cursor: 'pointer' }}>
-                <input type="checkbox" checked={useAI} onChange={e => setUseAI(e.target.checked)} style={{ accentColor: 'var(--accent)' }} />
-                Użyj AI przy zapisie
-              </label>
-            )}
           </div>
-        </div>
-        <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose}>Anuluj</button>
-          <button className="btn btn-primary" onClick={submit} disabled={loading || !title.trim()}>
-            {loading ? <span className="spinner" style={{ width: 16, height: 16 }} /> : (isEdit ? 'Zapisz' : 'Dodaj zadanie')}
-          </button>
-        </div>
+        )}
       </div>
     </div>
   )

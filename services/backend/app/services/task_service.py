@@ -1,9 +1,10 @@
 """Business logic layer for task operations."""
 
+from enum import Enum
 from typing import Optional
 
-from app.db.models import Category, Priority, Status, Task
-from app.db.repository import TaskRepository
+from app.db.models import Category, Comment, Priority, Status, Task
+from app.db.repository import CommentRepository, TaskRepository
 from app.schemas.task import CategoryResponse, TaskCreate, TaskResponse, TaskUpdate
 from app.services.ai_priority_service import AIPriorityService, MockAIPriorityService
 
@@ -15,10 +16,12 @@ class TaskService:
         self,
         repository: TaskRepository,
         ai_service: Optional[AIPriorityService] = None,
+        comment_repository: Optional[CommentRepository] = None,
     ) -> None:
-        """Initialize task service with repository and optional AI service."""
+        """Initialize task service with repository, AI service, and comment repository."""
         self.repository = repository
         self.ai_service = ai_service or MockAIPriorityService()
+        self.comment_repository = comment_repository
 
     def to_response(self, task: Task) -> TaskResponse:
         """Build a TaskResponse, resolving the nested category object."""
@@ -154,15 +157,20 @@ class TaskService:
         return self.repository.get_upcoming(days=days, owner_id=owner_id, skip=skip, limit=limit)
 
     def update_task(
-        self, task_id: int, task_data: TaskUpdate, owner_id: Optional[int] = None
+        self,
+        task_id: int,
+        task_data: TaskUpdate,
+        owner_id: Optional[int] = None,
+        changed_by_id: Optional[int] = None,
     ) -> Optional[Task]:
         """
-        Update an existing task.
+        Update an existing task, optionally recording history.
 
         Args:
             task_id: Task identifier
             task_data: Task update data
             owner_id: If set, only update the task if it belongs to this user
+            changed_by_id: If set, record history entries for changes
 
         Returns:
             Updated task if found and accessible, None otherwise
@@ -172,10 +180,29 @@ class TaskService:
             return None
 
         update_data = task_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(task, field, value)
 
-        return self.repository.update(task)
+        # Snapshot old values before mutation
+        changes: dict[str, tuple[str | None, str | None]] = {}
+        for field, new_value in update_data.items():
+            old_raw = getattr(task, field, None)
+            # Use .value for enums, str() otherwise
+            if isinstance(old_raw, Enum):
+                old_str = old_raw.value
+            else:
+                old_str = str(old_raw) if old_raw is not None else None
+            if isinstance(new_value, Enum):
+                new_str = new_value.value
+            else:
+                new_str = str(new_value) if new_value is not None else None
+            if old_str != new_str:
+                changes[field] = (old_str, new_str)
+            setattr(task, field, new_value)
+
+        return self.repository.update(
+            task,
+            changes=changes if changes else None,
+            changed_by_id=changed_by_id,
+        )
 
     def add_tag(self, task_id: int, tag: str, owner_id: Optional[int] = None) -> Optional[Task]:
         """Add a tag to a task (idempotent)."""
@@ -250,3 +277,64 @@ class TaskService:
             True if deleted, False if not found or not accessible
         """
         return self.repository.delete(task_id, owner_id=owner_id)
+
+    def get_task_history(
+        self, task_id: int, owner_id: Optional[int] = None
+    ) -> Optional[list]:
+        """
+        Get change history for a task.
+
+        Args:
+            task_id: Task identifier
+            owner_id: If set, only return history if task belongs to this user
+
+        Returns:
+            List of history entries if task found, None otherwise
+        """
+        task = self.repository.get_by_id(task_id, owner_id=owner_id)
+        if not task:
+            return None
+        return self.repository.get_history(task_id)
+
+    def add_comment(
+        self,
+        task_id: int,
+        content: str,
+        author_id: int,
+        owner_id: Optional[int] = None,
+    ) -> Optional[Comment]:
+        """
+        Add a comment to a task.
+
+        Args:
+            task_id: Task identifier
+            content: Comment text
+            author_id: User ID of the comment author
+            owner_id: If set, only add comment if task belongs to this user
+
+        Returns:
+            Created comment if task found, None otherwise
+        """
+        task = self.repository.get_by_id(task_id, owner_id=owner_id)
+        if not task:
+            return None
+        comment = Comment(task_id=task_id, author_id=author_id, content=content)
+        return self.comment_repository.create(comment)
+
+    def get_comments(
+        self, task_id: int, owner_id: Optional[int] = None
+    ) -> Optional[list]:
+        """
+        Get all comments on a task.
+
+        Args:
+            task_id: Task identifier
+            owner_id: If set, only return comments if task belongs to this user
+
+        Returns:
+            List of comments if task found, None otherwise
+        """
+        task = self.repository.get_by_id(task_id, owner_id=owner_id)
+        if not task:
+            return None
+        return self.comment_repository.get_by_task(task_id)

@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "api-server": {
+      "command": "python3",
+      "args": [
+        "services/mcp_server/main.py"
+      ],
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "PYTHONPATH": "services/mcp_server"
+      }
+    }
+  }
+}
+

@@ -5,6 +5,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$ROOT_DIR/services/backend"
 FRONTEND_DIR="$ROOT_DIR/services/frontend"
+MCP_SERVER_DIR="$ROOT_DIR/services/mcp_server"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 info()  { echo -e "${BLUE}[INFO]${NC}  $*"; }
@@ -29,8 +30,8 @@ check_command npm
 
 PYTHON_MINOR=$(python3 -c "import sys; print(sys.version_info.minor)")
 PYTHON_MAJOR=$(python3 -c "import sys; print(sys.version_info.major)")
-if [[ "$PYTHON_MAJOR" -lt 3 ]] || [[ "$PYTHON_MAJOR" -eq 3 && "$PYTHON_MINOR" -lt 11 ]]; then
-  error "Python 3.11+ is required (found $(python3 --version))."
+if [[ "$PYTHON_MAJOR" -lt 3 ]] || [[ "$PYTHON_MAJOR" -eq 3 && "$PYTHON_MINOR" -lt 10 ]]; then
+  error "Python 3.10+ is required (found $(python3 --version))."
   exit 1
 fi
 
@@ -108,6 +109,15 @@ cd "$FRONTEND_DIR"
 npm install --silent
 ok "Node.js dependencies installed"
 
+# ── MCP Server ────────────────────────────────────────────────────────────────
+
+info "Setting up MCP server..."
+cd "$BACKEND_DIR"
+source .venv/bin/activate
+pip install -r "$MCP_SERVER_DIR/requirements.txt" --quiet
+deactivate
+ok "MCP server dependencies installed"
+
 # ── Done ──────────────────────────────────────────────────────────────────────
 
 echo ""
@@ -116,14 +126,16 @@ echo -e "${GREEN}  Installation complete!${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 echo "  Start services:"
-echo "    ./start.sh           # starts backend + frontend"
+echo "    ./start.sh           # starts backend + frontend + mcp_server"
 echo ""
 echo "  Or manually:"
-echo "    Backend:   cd services/backend && source .venv/bin/activate && uvicorn app.main:app --reload"
-echo "    Frontend:  cd services/frontend && npm run dev"
+echo "    Backend:    cd services/backend && source .venv/bin/activate && uvicorn app.main:app --reload"
+echo "    Frontend:   cd services/frontend && npm run dev"
+echo "    MCP Server: cd services/mcp_server && python main.py"
 echo ""
 echo "  URLs (after start):"
-echo "    Frontend:  http://localhost:5173"
-echo "    Backend:   http://localhost:8000"
-echo "    API docs:  http://localhost:8000/docs"
+echo "    Frontend:   http://localhost:5173"
+echo "    Backend:    http://localhost:8000"
+echo "    API docs:   http://localhost:8000/docs"
+echo "    MCP Server: stdio (Claude Code integration)"
 echo ""

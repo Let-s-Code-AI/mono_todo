@@ -100,3 +100,35 @@ class PriorityAnalysisResponse(BaseModel):
 
     priority: Priority = Field(description="Suggested task priority level")
     priority_reason: str = Field(description="Reason for the suggested priority")
+
+
+class TaskHistoryResponse(BaseModel):
+    """Schema for a single task history entry."""
+
+    id: int
+    task_id: int
+    changed_by_id: int
+    field_name: str
+    old_value: Optional[str] = None
+    new_value: Optional[str] = None
+    changed_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class CommentCreate(BaseModel):
+    """Schema for creating a comment."""
+
+    content: str = Field(min_length=1, max_length=5000, description="Comment text")
+
+
+class CommentResponse(BaseModel):
+    """Schema for a comment API response."""
+
+    id: int
+    task_id: int
+    author_id: int
+    content: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

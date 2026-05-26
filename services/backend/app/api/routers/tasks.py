@@ -7,14 +7,17 @@ from sqlmodel import Session
 
 from app.api.deps import get_current_admin_user, get_current_user
 from app.core.config import settings
-from app.db.models import Category, Priority, Status, User
-from app.db.repository import TaskRepository
+from app.db.models import Category, Comment, Priority, Status, TaskHistory, User
+from app.db.repository import CommentRepository, TaskRepository
 from app.db.session import get_session
 from app.schemas.task import (
+    CommentCreate,
+    CommentResponse,
     PriorityAnalysisRequest,
     PriorityAnalysisResponse,
     TagCreate,
     TaskCreate,
+    TaskHistoryResponse,
     TaskResponse,
     TaskUpdate,
 )
@@ -58,12 +61,18 @@ def get_ai_service() -> MockAIPriorityService | OpenAIPriorityService:
     return MockAIPriorityService()
 
 
+def get_comment_repository(session: Session = Depends(get_session)) -> CommentRepository:
+    """Dependency to get comment repository."""
+    return CommentRepository(session)
+
+
 def get_task_service(
     repository: TaskRepository = Depends(get_task_repository),
     ai_service: MockAIPriorityService | OpenAIPriorityService = Depends(get_ai_service),
+    comment_repository: CommentRepository = Depends(get_comment_repository),
 ) -> TaskService:
     """Dependency to get task service."""
-    return TaskService(repository, ai_service)
+    return TaskService(repository, ai_service, comment_repository)
 
 
 def _validate_category_and_get_name(category_id: Optional[int], session: Session) -> Optional[str]:
@@ -229,6 +238,91 @@ def get_upcoming_tasks(
     return [service.to_response(task) for task in tasks]
 
 
+@router.get("/{task_id}/history", response_model=list[TaskHistoryResponse])
+def get_task_history(
+    task_id: int,
+    service: TaskService = Depends(get_task_service),
+    current_user: User = Depends(get_current_user),
+) -> list[TaskHistoryResponse]:
+    """
+    Get the full change history for a task.
+
+    Args:
+        task_id: Task identifier
+        service: Task service dependency
+        current_user: Authenticated user
+
+    Returns:
+        List of history entries, newest first
+
+    Raises:
+        HTTPException: If task not found or not owned by current user
+    """
+    history = service.get_task_history(task_id, owner_id=current_user.id)
+    if history is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return history
+
+
+@router.post("/{task_id}/comments", response_model=CommentResponse, status_code=201)
+async def add_comment(
+    task_id: int,
+    comment_data: CommentCreate,
+    service: TaskService = Depends(get_task_service),
+    current_user: User = Depends(get_current_user),
+) -> CommentResponse:
+    """
+    Add a comment to a task.
+
+    Args:
+        task_id: Task identifier
+        comment_data: Comment text
+        service: Task service dependency
+        current_user: Authenticated user
+
+    Returns:
+        Created comment
+
+    Raises:
+        HTTPException: If task not found or not owned by current user
+    """
+    comment = service.add_comment(
+        task_id,
+        content=comment_data.content,
+        author_id=current_user.id,
+        owner_id=current_user.id,
+    )
+    if comment is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return comment
+
+
+@router.get("/{task_id}/comments", response_model=list[CommentResponse])
+def get_comments(
+    task_id: int,
+    service: TaskService = Depends(get_task_service),
+    current_user: User = Depends(get_current_user),
+) -> list[CommentResponse]:
+    """
+    Get all comments on a task.
+
+    Args:
+        task_id: Task identifier
+        service: Task service dependency
+        current_user: Authenticated user
+
+    Returns:
+        List of comments, oldest first
+
+    Raises:
+        HTTPException: If task not found or not owned by current user
+    """
+    comments = service.get_comments(task_id, owner_id=current_user.id)
+    if comments is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return comments
+
+
 @router.get("/{task_id}", response_model=TaskResponse)
 def get_task(
     task_id: int,
@@ -281,7 +375,9 @@ async def update_task(
     """
     _validate_category_and_get_name(task_data.category_id, session)
 
-    task = service.update_task(task_id, task_data, owner_id=current_user.id)
+    task = service.update_task(
+        task_id, task_data, owner_id=current_user.id, changed_by_id=current_user.id
+    )
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return service.to_response(task)

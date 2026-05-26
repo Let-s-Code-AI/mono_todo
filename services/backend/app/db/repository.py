@@ -6,7 +6,7 @@ from typing import Optional
 from sqlalchemy import func, text
 from sqlmodel import Session, select
 
-from app.db.models import Category, Priority, Status, Task, User
+from app.db.models import Category, Comment, Priority, Status, Task, TaskHistory, User
 
 
 class UserRepository:
@@ -140,10 +140,26 @@ class TaskRepository:
         statement = statement.order_by(Task.due_date).offset(skip).limit(limit)
         return list(self.session.exec(statement).all())
 
-    def update(self, task: Task) -> Task:
-        """Update an existing task."""
+    def update(
+        self,
+        task: Task,
+        changes: dict[str, tuple[str | None, str | None]] | None = None,
+        changed_by_id: int | None = None,
+    ) -> Task:
+        """Update an existing task, optionally recording history."""
         task.updated_at = datetime.now(timezone.utc)
         self.session.add(task)
+        if changes and changed_by_id is not None:
+            now = datetime.now(timezone.utc)
+            for field_name, (old_val, new_val) in changes.items():
+                self.session.add(TaskHistory(
+                    task_id=task.id,
+                    changed_by_id=changed_by_id,
+                    field_name=field_name,
+                    old_value=old_val,
+                    new_value=new_val,
+                    changed_at=now,
+                ))
         self.session.commit()
         self.session.refresh(task)
         return task
@@ -172,3 +188,35 @@ class TaskRepository:
             self.session.commit()
             return True
         return False
+
+    def get_history(self, task_id: int) -> list[TaskHistory]:
+        """Return all history entries for a task, newest first."""
+        statement = (
+            select(TaskHistory)
+            .where(TaskHistory.task_id == task_id)
+            .order_by(TaskHistory.changed_at.desc())
+        )
+        return list(self.session.exec(statement).all())
+
+
+class CommentRepository:
+    """Repository for comment database operations."""
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def create(self, comment: Comment) -> Comment:
+        """Create a new comment."""
+        self.session.add(comment)
+        self.session.commit()
+        self.session.refresh(comment)
+        return comment
+
+    def get_by_task(self, task_id: int) -> list[Comment]:
+        """Get all comments for a task, oldest first."""
+        statement = (
+            select(Comment)
+            .where(Comment.task_id == task_id)
+            .order_by(Comment.created_at.asc())
+        )
+        return list(self.session.exec(statement).all())
