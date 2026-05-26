@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "todo-backend": {
+      "type": "stdio",
+      "command": "/Users/mw/mono_todo/services/mcp_tool/.venv/bin/python",
+      "args": [
+        "/Users/mw/mono_todo/services/mcp_tool/server.py"
+      ],
+      "env": {}
+    }
+  }
+}
