@@ -7,7 +7,7 @@ from sqlmodel import Session
 
 from app.api.deps import get_current_admin_user, get_current_user
 from app.core.config import settings
-from app.db.models import Category, Comment, Priority, Status, TaskHistory, User
+from app.db.models import Category, Priority, Status, User
 from app.db.repository import CommentRepository, TaskRepository
 from app.db.session import get_session
 from app.schemas.task import (

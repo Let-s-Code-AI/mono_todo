@@ -54,11 +54,17 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Install mutmut
+        run: pip install mutmut
+
       - name: Run migrations
         run: alembic upgrade head
 
       - name: Run tests
-        run: pytest -v --tb=short
+        run: pytest -v --tb=short --cov=app --cov-report=term-missing --cov-fail-under=80
+
+      - name: Run mutation tests
+        run: mutmut run
 
       - name: Clean up test DB
         if: always()

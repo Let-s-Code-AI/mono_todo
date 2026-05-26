@@ -1,9 +1,8 @@
 """Tests for task history and comments (Epic 4)."""
 
-import pytest
 from sqlmodel import Session
 
-from app.db.models import Comment, Priority, Status, Task, TaskHistory, User
+from app.db.models import Priority, Status, Task, User
 from fastapi.testclient import TestClient
 
 

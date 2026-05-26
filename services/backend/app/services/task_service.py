@@ -3,7 +3,7 @@
 from enum import Enum
 from typing import Optional
 
-from app.db.models import Category, Comment, Priority, Status, Task
+from app.db.models import Comment, Priority, Status, Task
 from app.db.repository import CommentRepository, TaskRepository
 from app.schemas.task import CategoryResponse, TaskCreate, TaskResponse, TaskUpdate
 from app.services.ai_priority_service import AIPriorityService, MockAIPriorityService
