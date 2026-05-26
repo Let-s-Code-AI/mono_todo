@@ -246,7 +246,9 @@ async def update_task(
     Raises:
         HTTPException: If task/category not found or not owned by current user
     """
-    task = service.update_task(task_id, task_data, owner_id=current_user.id, user_id=current_user.id)
+    task = service.update_task(
+        task_id, task_data, owner_id=current_user.id, user_id=current_user.id
+    )
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return service.to_response(task)
@@ -382,7 +384,9 @@ def add_comment(
     Raises:
         HTTPException: If task not found or not owned by current user
     """
-    comment = service.add_comment(task_id, owner_id=current_user.id, user_id=current_user.id, content=comment_data.content)
+    comment = service.add_comment(
+        task_id, owner_id=current_user.id, user_id=current_user.id, content=comment_data.content
+    )
     if not comment:
         raise HTTPException(status_code=404, detail="Task not found")
     return comment

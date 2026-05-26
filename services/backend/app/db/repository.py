@@ -206,7 +206,11 @@ class TaskHistoryRepository:
 
     def get_by_task(self, task_id: int) -> list[TaskHistory]:
         """Get all history entries for a task, ordered by date."""
-        statement = select(TaskHistory).where(TaskHistory.task_id == task_id).order_by(TaskHistory.changed_at)
+        statement = (
+            select(TaskHistory)
+            .where(TaskHistory.task_id == task_id)
+            .order_by(TaskHistory.changed_at)
+        )
         return list(self.session.exec(statement).all())
 
 
@@ -227,5 +231,9 @@ class TaskCommentRepository:
 
     def get_by_task(self, task_id: int) -> list[TaskComment]:
         """Get all comments for a task, ordered by date."""
-        statement = select(TaskComment).where(TaskComment.task_id == task_id).order_by(TaskComment.created_at)
+        statement = (
+            select(TaskComment)
+            .where(TaskComment.task_id == task_id)
+            .order_by(TaskComment.created_at)
+        )
         return list(self.session.exec(statement).all())

@@ -6,8 +6,13 @@ from typing import Optional
 from fastapi import HTTPException
 from sqlmodel import Session
 
-from app.db.models import Priority, Status, Task, User
-from app.db.repository import TaskCommentRepository, TaskHistoryRepository, TaskRepository, UserRepository
+from app.db.models import Priority, Status, Task
+from app.db.repository import (
+    TaskCommentRepository,
+    TaskHistoryRepository,
+    TaskRepository,
+    UserRepository,
+)
 from app.schemas.task import (
     CategoryResponse,
     TaskCommentResponse,
@@ -176,7 +181,11 @@ class TaskService:
         return self.repository.get_upcoming(days=days, owner_id=owner_id, skip=skip, limit=limit)
 
     def update_task(
-        self, task_id: int, task_data: TaskUpdate, owner_id: Optional[int] = None, user_id: Optional[int] = None
+        self,
+        task_id: int,
+        task_data: TaskUpdate,
+        owner_id: Optional[int] = None,
+        user_id: Optional[int] = None,
     ) -> Optional[Task]:
         """
         Update an existing task.
@@ -199,7 +208,15 @@ class TaskService:
             self._resolve_category_name_or_404(update_data["category_id"])
 
         history_repo = TaskHistoryRepository(self.session)
-        tracked_fields = {"title", "description", "priority", "status", "due_date", "category_id", "tags"}
+        tracked_fields = {
+            "title",
+            "description",
+            "priority",
+            "status",
+            "due_date",
+            "category_id",
+            "tags",
+        }
 
         for field, value in update_data.items():
             if field in tracked_fields and user_id:
@@ -287,7 +304,9 @@ class TaskService:
         """
         return self.repository.delete(task_id, owner_id=owner_id)
 
-    def get_task_history(self, task_id: int, owner_id: Optional[int] = None) -> Optional[list[TaskHistoryResponse]]:
+    def get_task_history(
+        self, task_id: int, owner_id: Optional[int] = None
+    ) -> Optional[list[TaskHistoryResponse]]:
         """
         Get change history for a task.
 
@@ -355,7 +374,9 @@ class TaskService:
             created_at=comment.created_at,
         )
 
-    def get_task_comments(self, task_id: int, owner_id: Optional[int] = None) -> Optional[list[TaskCommentResponse]]:
+    def get_task_comments(
+        self, task_id: int, owner_id: Optional[int] = None
+    ) -> Optional[list[TaskCommentResponse]]:
         """
         Get all comments for a task.
 

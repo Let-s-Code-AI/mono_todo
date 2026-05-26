@@ -1,9 +1,8 @@
 """Tests for task history and comments functionality."""
 
-import pytest
 from fastapi.testclient import TestClient
 
-from app.db.models import Task, Status, Priority
+from app.db.models import Status, Priority
 from app.schemas.task import TaskCreate, TaskUpdate
 
 
