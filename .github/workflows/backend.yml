@@ -63,3 +63,32 @@ jobs:
       - name: Clean up test DB
         if: always()
         run: rm -f test_todo.db
+
+  mutation-tests:
+    name: Mutation Tests
+    runs-on: ubuntu-latest
+    env:
+      JWT_SECRET_KEY: ci-test-secret-not-for-production
+      DATABASE_URL: sqlite:///./test_todo.db
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: services/backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt mutmut
+
+      - name: Run mutations tests
+        run: mutmut run --tests-dir tests --paths-to-mutate . --no-cov
+
+      - name: Get mutation score
+        if: always()
+        run: mutmut results
+
+      - name: Clean up test DB
+        if: always()
+        run: rm -f test_todo.db
