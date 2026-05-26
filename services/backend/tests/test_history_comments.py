@@ -7,7 +7,7 @@ from app.schemas.task import TaskCreate, TaskUpdate
 
 
 def test_update_task_creates_history(client: TestClient, test_db):
-    """Updating a task title should create a history entry."""
+    """Updating a task title should create a history entry. """
     task_data = TaskCreate(title="Original Title", description="Test task")
     res = client.post("/tasks/", json=task_data.model_dump())
     assert res.status_code == 201
