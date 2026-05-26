@@ -34,7 +34,7 @@ class AIPriorityService(Protocol):
 PriorityCacheKey = str
 PriorityCacheValue = Tuple[Priority, str | None]
 
-# Simple in-memory cache for priority suggestions.
+# Simple in-memory cache for priority suggestions
 # Key: normalized "title|description|category" string
 _PRIORITY_CACHE: Dict[PriorityCacheKey, PriorityCacheValue] = {}
 
