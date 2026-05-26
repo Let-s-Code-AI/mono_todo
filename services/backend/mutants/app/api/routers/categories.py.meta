@@ -1,0 +1,9 @@
+{
+    "exit_code_by_key": {
+        "app.api.routers.categories.x_get_category_repository__mutmut_1": null,
+        "app.api.routers.categories.x_get_category_service__mutmut_1": null
+    },
+    "durations_by_key": {},
+    "type_check_error_by_key": {},
+    "estimated_durations_by_key": {}
+}

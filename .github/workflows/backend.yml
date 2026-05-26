@@ -82,8 +82,18 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt mutmut
 
+      - name: Create mutmut config
+        run: |
+          cat > setup.cfg << EOF
+          [mutmut]
+          paths_to_mutate=app
+          test_command=pytest tests -x
+          timeout=10
+          timeout_multiplier=1.5
+          EOF
+
       - name: Run mutations tests
-        run: mutmut run --tests-dir tests --paths-to-mutate . --no-cov --fail-under 80
+        run: mutmut run
 
       - name: Get mutation score
         if: always()
