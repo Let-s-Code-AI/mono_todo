@@ -1,5 +1,7 @@
 """Pytest configuration and fixtures."""
 
+from typing import Optional
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import SQLModel, create_engine, Session
@@ -59,9 +61,8 @@ def _auth_headers(user: User) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-@pytest.fixture(scope="function")
-def client(test_engine, test_user):
-    """Test client authenticated as a regular user."""
+def _build_client(test_engine, user: Optional[User] = None):
+    """Yield a TestClient with session/AI overrides, optionally authenticated as `user`."""
     from app.db.session import get_session
     from app.api.routers.tasks import get_ai_service
     from app.services.ai_priority_service import MockAIPriorityService
@@ -77,54 +78,42 @@ def client(test_engine, test_user):
     app.dependency_overrides[get_ai_service] = override_get_ai_service
 
     with TestClient(app) as test_client:
-        test_client.headers.update(_auth_headers(test_user))
+        if user is not None:
+            test_client.headers.update(_auth_headers(user))
         yield test_client
 
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(scope="function")
+def other_user(test_db) -> User:
+    """Create a second regular user, unrelated to `test_user`."""
+    user = User(email="other@example.com", hashed_password=hash_password("password123"))
+    test_db.add(user)
+    test_db.commit()
+    test_db.refresh(user)
+    return user
+
+
+@pytest.fixture(scope="function")
+def client(test_engine, test_user):
+    """Test client authenticated as a regular user."""
+    yield from _build_client(test_engine, test_user)
+
+
+@pytest.fixture(scope="function")
+def other_client(test_engine, other_user):
+    """Test client authenticated as `other_user`."""
+    yield from _build_client(test_engine, other_user)
 
 
 @pytest.fixture(scope="function")
 def admin_client(test_engine, test_admin):
     """Test client authenticated as an admin user."""
-    from app.db.session import get_session
-    from app.api.routers.tasks import get_ai_service
-    from app.services.ai_priority_service import MockAIPriorityService
-
-    def override_get_session():
-        with Session(test_engine) as session:
-            yield session
-
-    def override_get_ai_service():
-        return MockAIPriorityService()
-
-    app.dependency_overrides[get_session] = override_get_session
-    app.dependency_overrides[get_ai_service] = override_get_ai_service
-
-    with TestClient(app) as test_client:
-        test_client.headers.update(_auth_headers(test_admin))
-        yield test_client
-
-    app.dependency_overrides.clear()
+    yield from _build_client(test_engine, test_admin)
 
 
 @pytest.fixture(scope="function")
 def unauth_client(test_engine):
     """Unauthenticated test client (for testing auth endpoints)."""
-    from app.db.session import get_session
-    from app.api.routers.tasks import get_ai_service
-    from app.services.ai_priority_service import MockAIPriorityService
-
-    def override_get_session():
-        with Session(test_engine) as session:
-            yield session
-
-    def override_get_ai_service():
-        return MockAIPriorityService()
-
-    app.dependency_overrides[get_session] = override_get_session
-    app.dependency_overrides[get_ai_service] = override_get_ai_service
-
-    with TestClient(app) as test_client:
-        yield test_client
-
-    app.dependency_overrides.clear()
+    yield from _build_client(test_engine)

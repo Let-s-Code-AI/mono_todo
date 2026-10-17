@@ -218,6 +218,24 @@ Run tests with coverage:
 pytest --cov=app --cov-report=html
 ```
 
+## Continuous Integration
+
+`.github/workflows/backend.yml` runs on every pull request and on pushes to `main`
+that touch `services/backend/`:
+
+| Job | What it does |
+|---|---|
+| `lint` | `ruff check` and `black --check` (line length 100, config in `pyproject.toml`) |
+| `test` | `alembic upgrade head` on a fresh SQLite DB, then `pytest --cov=app --cov-fail-under=80`; coverage table in the job summary, `htmlcov/` + `coverage.xml` uploaded as the `backend-coverage` artifact |
+| `mutation` | `mutmut run` (after `test` passes) |
+
+Run the same checks locally before pushing:
+
+```bash
+ruff check . && black --check .
+pytest --cov=app --cov-report=term-missing --cov-fail-under=80
+```
+
 ## Database Migrations
 
 Create a new migration:
@@ -313,5 +331,4 @@ This is an MVP project for demonstration purposes.
 - WebSocket support for real-time updates
 - Background task processing with Celery
 - Docker containerization
-- CI/CD pipeline
 

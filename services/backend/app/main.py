@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routers import auth, categories, tasks
+from app.api.routers import auth, categories, projects, tasks
 from app.db.session import create_db_and_tables
 
 
@@ -35,6 +35,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(categories.router)
+app.include_router(projects.router)
 app.include_router(tasks.router)
 
 

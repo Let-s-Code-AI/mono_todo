@@ -6,7 +6,7 @@ Monorepo dla projektu Todo Workshop składające się z trzech serwisów:
 |---|---|---|
 | `services/backend` | `todo_ai_worshop` | FastAPI + SQLite + AI priority |
 | `services/frontend` | `todo_workshop_frontend` | React + Vite |
-| `services/selenium` | `todo_selenium` | Testy E2E (Selenium) |
+| `services/e2e` | `todo_e2e` | Testy E2E (Playwright) |
 
 ## Struktura
 
@@ -15,7 +15,7 @@ mono_todo/
 ├── services/
 │   ├── backend/    # Python / FastAPI
 │   ├── frontend/   # JavaScript / React
-│   └── selenium/   # Python / Pytest + Selenium
+│   └── e2e/        # Python / Pytest + Playwright
 └── README.md
 ```
 
@@ -28,6 +28,6 @@ git subtree pull --prefix=services/backend todo_ai_worshop main --squash
 # Frontend
 git subtree pull --prefix=services/frontend todo_workshop_frontend main --squash
 
-# Selenium
-git subtree pull --prefix=services/selenium todo_selenium main --squash
+# E2E
+git subtree pull --prefix=services/e2e todo_selenium main --squash
 ```

@@ -32,6 +32,18 @@ alembic revision --autogenerate -m "Description"
 alembic downgrade -1
 ```
 
+## Development Workflow: TDD
+
+Every change to `app/` follows the `tdd` skill (`.claude/skills/tdd/SKILL.md`): **red → green → refactor**.
+
+- Before coding, write a checklist of observable behaviors; each item becomes one test.
+- Write one failing test, run it, confirm it fails for the right reason. No production code before that.
+- Write the minimum that makes it pass, then run the whole suite.
+- Refactor only on green, then `pytest -q && ruff check app tests && black app tests`.
+- Start outside-in: an API test through `TestClient` first; service unit tests only for non-trivial logic.
+- Bugfix = reproduce with a failing test first, then fix; the test stays as a regression guard.
+- Never leave the suite red between cycles or in a commit.
+
 ## Architecture
 
 Clean layered architecture — no layer should skip the one below it:

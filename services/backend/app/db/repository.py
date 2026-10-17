@@ -6,7 +6,16 @@ from typing import Optional
 from sqlalchemy import func, text
 from sqlmodel import Session, select
 
-from app.db.models import Category, Priority, Status, Task, User
+from app.db.models import (
+    Category,
+    Priority,
+    Project,
+    ProjectMember,
+    ProjectRole,
+    Status,
+    Task,
+    User,
+)
 
 
 class UserRepository:
@@ -26,6 +35,57 @@ class UserRepository:
 
     def get_by_email(self, email: str) -> Optional[User]:
         return self.session.exec(select(User).where(User.email == email)).first()
+
+
+class ProjectRepository:
+    """Repository for project and membership database operations."""
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def create(self, project: Project) -> Project:
+        """Create a project and register its owner as a member."""
+        self.session.add(project)
+        self.session.commit()
+        self.session.refresh(project)
+        self.session.add(
+            ProjectMember(project_id=project.id, user_id=project.owner_id, role=ProjectRole.OWNER)
+        )
+        self.session.commit()
+        return project
+
+    def get_by_id(self, project_id: int) -> Optional[Project]:
+        return self.session.get(Project, project_id)
+
+    def get_member(self, project_id: int, user_id: int) -> Optional[ProjectMember]:
+        return self.session.get(ProjectMember, (project_id, user_id))
+
+    def add_member(self, project_id: int, user_id: int) -> ProjectMember:
+        member = ProjectMember(project_id=project_id, user_id=user_id)
+        self.session.add(member)
+        self.session.commit()
+        self.session.refresh(member)
+        return member
+
+    def list_members(self, project_id: int) -> list[tuple[ProjectMember, User]]:
+        """Return (membership, user) pairs for a project, owner first."""
+        statement = (
+            select(ProjectMember, User)
+            .join(User, User.id == ProjectMember.user_id)
+            .where(ProjectMember.project_id == project_id)
+            .order_by(ProjectMember.role, User.id)
+        )
+        return list(self.session.exec(statement).all())
+
+    def get_for_user(self, user_id: int) -> list[Project]:
+        """Return projects the user is a member of."""
+        statement = (
+            select(Project)
+            .join(ProjectMember, ProjectMember.project_id == Project.id)
+            .where(ProjectMember.user_id == user_id)
+            .order_by(Project.id)
+        )
+        return list(self.session.exec(statement).all())
 
 
 class CategoryRepository:

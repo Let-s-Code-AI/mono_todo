@@ -52,5 +52,4 @@ python_functions = ["test_*"]
 asyncio_mode = "auto"
 
 [tool.mutmut]
-paths_to_mutate = "app/"
-runner = "python -m pytest -x -q"
+source_paths = ["app"]

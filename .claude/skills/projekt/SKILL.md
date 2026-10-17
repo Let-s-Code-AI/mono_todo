@@ -1,6 +1,6 @@
 ---
 name: projekt
-description: Standardy kodu, testowania, narzędzi i workflow dla tego monorepo (FastAPI backend + React frontend + Selenium E2E). Użyj gdy pracujesz nad tym projektem i potrzebujesz przypomnienia konwencji, komend lub architektury.
+description: Standardy kodu, testowania, narzędzi i workflow dla tego monorepo (FastAPI backend + React frontend + Playwright E2E). Użyj gdy pracujesz nad tym projektem i potrzebujesz przypomnienia konwencji, komend lub architektury.
 ---
 
 # Projekt mono_todo — przewodnik
@@ -11,7 +11,7 @@ Monorepo z trzema serwisami:
 |---|---|---|
 | Backend | `services/backend` | Python 3.11+ / FastAPI / SQLite / Alembic |
 | Frontend | `services/frontend` | JavaScript / React 18 / Vite |
-| E2E tests | `services/selenium` | Python / Pytest / Selenium |
+| E2E tests | `services/e2e` | Python / Pytest / Playwright |
 
 ---
 
@@ -62,18 +62,26 @@ Konwencje:
 - Każdy test dostaje świeżą bazę (fixture function-scoped)
 - Globalne cache (`_PRIORITY_CACHE`) czyszczone przez `autouse` fixture
 
-### E2E — Selenium
+### E2E — Playwright
 
 ```bash
-cd services/selenium
-pytest                               # wszystkie testy E2E
-pytest test_tasks.py                 # konkretny moduł
-BASE_URL=http://localhost:5173 pytest
+cd services/e2e
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/playwright install chromium   # jednorazowo
+
+.venv/bin/pytest                     # wszystkie testy E2E (headless)
+.venv/bin/pytest -n auto             # równolegle (pytest-xdist)
+.venv/bin/pytest test_tasks.py       # konkretny moduł
+.venv/bin/pytest --headed            # z widoczną przeglądarką
+BASE_URL=http://localhost:5173 AUTH_URL=http://localhost:8000 .venv/bin/pytest
 ```
 
-- Wymaga działającego backendu i frontendu (`./start.sh`)
-- Nowy użytkownik tworzony raz na sesję (fixture `session`-scoped w `conftest.py`)
-- Driver `function`-scoped — świeża przeglądarka dla każdego testu
+- Wymaga działającego backendu i frontendu (`./start.sh`), backend bez `OPENAI_API_KEY`
+- Nowy użytkownik rejestrowany przez API raz na sesję (przy xdist: raz na worker)
+- Zadania użytkownika czyszczone przez API przed i po każdym teście (`clean_tasks`, autouse)
+- `logged_in_page` — świeży kontekst z tokenem JWT w `storage_state`; `page` — kontekst wylogowany
+- Selektory tylko w page objectach (`pages.py`), asercje web-first (`expect(...)`), bez `sleep`
+- Przy błędzie zrzut ekranu i trace w `test-results/` (`playwright show-trace <trace.zip>`)
 
 ---
 
@@ -105,8 +113,9 @@ BASE_URL=http://localhost:5173 pytest
 
 | Narzędzie | Rola |
 |---|---|
-| Selenium | Automatyzacja przeglądarki |
-| webdriver-manager | Automatyczne pobieranie ChromeDriver |
+| Playwright (sync API) | Automatyzacja przeglądarki (Chromium) |
+| pytest-playwright | Fixtures `page`/`new_context`, screenshot i trace przy błędzie |
+| pytest-xdist | Równoległe uruchamianie (`-n auto`) |
 | pytest | Test runner |
 
 ---

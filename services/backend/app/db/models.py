@@ -24,6 +24,13 @@ class Status(str, Enum):
     DONE = "done"
 
 
+class ProjectRole(str, Enum):
+    """Role of a user inside a project."""
+
+    OWNER = "owner"
+    MEMBER = "member"
+
+
 class User(SQLModel, table=True):
     """User database model."""
 
@@ -32,6 +39,23 @@ class User(SQLModel, table=True):
     hashed_password: str
     is_admin: bool = Field(default=False)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class Project(SQLModel, table=True):
+    """Project database model: a shared workspace owned by one user."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(max_length=100)
+    owner_id: int = Field(foreign_key="user.id", index=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ProjectMember(SQLModel, table=True):
+    """Membership of a user in a project."""
+
+    project_id: int = Field(foreign_key="project.id", primary_key=True)
+    user_id: int = Field(foreign_key="user.id", primary_key=True)
+    role: ProjectRole = Field(default=ProjectRole.MEMBER)
 
 
 class Category(SQLModel, table=True):
