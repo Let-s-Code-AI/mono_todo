@@ -59,9 +59,9 @@ def test_status_change_by_member_is_pushed_as_task_updated(
 ) -> None:
     """Scenario: Członek oznacza zadanie jako zrobione, właściciel dostaje task_updated."""
     project_id = _shared_project(client, other_user)
-    task_id = client.post("/tasks/", json={"title": "Kupić farbę", "project_id": project_id}).json()[
-        "id"
-    ]
+    task_id = client.post(
+        "/tasks/", json={"title": "Kupić farbę", "project_id": project_id}
+    ).json()["id"]
 
     with client.websocket_connect(_socket_url(test_user)) as owner_socket:
         owner_socket.receive_json()
@@ -78,9 +78,9 @@ def test_tag_change_is_pushed_as_task_updated(
 ) -> None:
     """Scenario: Dodanie tagu wysyła task_updated z nową listą tagów."""
     project_id = _shared_project(client, other_user)
-    task_id = client.post("/tasks/", json={"title": "Kupić farbę", "project_id": project_id}).json()[
-        "id"
-    ]
+    task_id = client.post(
+        "/tasks/", json={"title": "Kupić farbę", "project_id": project_id}
+    ).json()["id"]
 
     with client.websocket_connect(_socket_url(other_user)) as member_socket:
         member_socket.receive_json()
@@ -97,9 +97,9 @@ def test_task_deleted_is_pushed_to_members(
 ) -> None:
     """Scenario: Usunięcie zadania wysyła task_deleted z id zadania i projektu."""
     project_id = _shared_project(client, other_user)
-    task_id = client.post("/tasks/", json={"title": "Kupić farbę", "project_id": project_id}).json()[
-        "id"
-    ]
+    task_id = client.post(
+        "/tasks/", json={"title": "Kupić farbę", "project_id": project_id}
+    ).json()["id"]
 
     with client.websocket_connect(_socket_url(other_user)) as member_socket:
         member_socket.receive_json()
