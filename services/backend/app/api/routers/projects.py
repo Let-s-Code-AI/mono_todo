@@ -149,7 +149,8 @@ def remove_member(
         current_user: Authenticated user
 
     Raises:
-        HTTPException: 404 if the project or the membership does not exist
+        HTTPException: 404 if the project or the membership does not exist,
+            403 if the current user is not the project owner
     """
     error = service.remove_member(project_id, user_id, actor_id=current_user.id)
     if error:

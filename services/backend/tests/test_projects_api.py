@@ -149,3 +149,20 @@ def test_remove_member_as_owner_returns_204_and_removes_from_list(
     assert response.status_code == 204
     emails = [m["email"] for m in client.get(f"/projects/{project_id}/members").json()]
     assert emails == [test_user.email]
+
+
+def test_remove_member_as_non_owner_returns_403(
+    client: TestClient, other_client: TestClient, other_user: User, test_db: Session
+) -> None:
+    """Scenario: Zwykły członek próbuje usunąć innego członka."""
+    project_id = _create_project(client)
+    third = User(email="third@example.com", hashed_password="x")
+    test_db.add(third)
+    test_db.commit()
+    test_db.refresh(third)
+    client.post(f"/projects/{project_id}/members", json={"email": other_user.email})
+    client.post(f"/projects/{project_id}/members", json={"email": third.email})
+
+    response = other_client.delete(f"/projects/{project_id}/members/{third.id}")
+
+    assert response.status_code == 403

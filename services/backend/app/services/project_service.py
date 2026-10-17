@@ -73,6 +73,8 @@ class ProjectService:
         """Remove a user from the project on behalf of `actor_id`. None means success."""
         if not self.repository.get_by_id(project_id):
             return MemberError.PROJECT_NOT_FOUND
+        if not self._is_owner(project_id, actor_id):
+            return MemberError.NOT_OWNER
         member = self.repository.get_member(project_id, user_id)
         if not member:
             return MemberError.MEMBER_NOT_FOUND
