@@ -9,7 +9,7 @@ from app.api.deps import get_current_admin_user, get_current_user
 from app.api.routers.projects import get_project_repository
 from app.core.config import settings
 from app.db.models import Category, Priority, Status, User
-from app.db.repository import CategoryRepository, ProjectRepository, TaskRepository
+from app.db.repository import ProjectRepository, TaskRepository
 from app.db.session import get_session
 from app.schemas.task import (
     PriorityAnalysisRequest,

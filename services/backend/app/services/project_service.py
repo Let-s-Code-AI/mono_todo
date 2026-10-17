@@ -1,7 +1,6 @@
 """Business logic layer for projects and project membership."""
 
 from enum import Enum
-from typing import Optional
 
 from app.db.models import Project, ProjectMember, ProjectRole, User
 from app.db.repository import ProjectRepository, UserRepository
@@ -70,7 +69,7 @@ class ProjectService:
             return MemberError.NOT_MEMBER
         return self.repository.list_members(project_id)
 
-    def remove_member(self, project_id: int, user_id: int, actor_id: int) -> Optional[MemberError]:
+    def remove_member(self, project_id: int, user_id: int, actor_id: int) -> MemberError | None:
         """Remove a user from the project on behalf of `actor_id`. None means success."""
         if not self.repository.get_by_id(project_id):
             return MemberError.PROJECT_NOT_FOUND

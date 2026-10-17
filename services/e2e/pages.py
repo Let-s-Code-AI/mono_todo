@@ -172,3 +172,87 @@ class DashboardPage:
         ):
             self.all_chip.click()
         expect(self.all_chip).to_have_class(ACTIVE_CLASS)
+
+
+class ProjectModal:
+    """'Nowy projekt' modal."""
+
+    def __init__(self, page: Page) -> None:
+        self.page = page
+        self.root = page.locator(".modal")
+        self.overlay = page.locator(".modal-overlay")
+        self.name_input = self.root.get_by_placeholder("np. Remont mieszkania")
+        self.submit_button = self.root.get_by_role("button", name="Utwórz")
+        self.cancel_button = self.root.get_by_role("button", name="Anuluj")
+
+    def submit(self) -> None:
+        self.submit_button.click()
+        expect(self.overlay).to_be_hidden()
+
+
+class MembersModal:
+    """Project members modal: list of members, add by email, remove."""
+
+    def __init__(self, page: Page) -> None:
+        self.page = page
+        self.root = page.locator(".modal")
+        self.overlay = page.locator(".modal-overlay")
+        self.email_input = self.root.get_by_placeholder("email użytkownika")
+        self.add_button = self.root.get_by_role("button", name="Dodaj", exact=True)
+        self.rows = self.root.locator(".member-row")
+        self.error = self.root.locator(".alert-error")
+        self.close_button = self.root.get_by_role("button", name="Zamknij")
+
+    def member_row(self, email: str) -> Locator:
+        return self.rows.filter(has_text=email)
+
+    def add_member(self, email: str) -> None:
+        self.email_input.fill(email)
+        self.add_button.click()
+
+    def remove_member(self, email: str) -> None:
+        """Clicks 'Usuń z projektu' and accepts the native confirm()."""
+        self.page.once("dialog", lambda dialog: dialog.accept())
+        self.member_row(email).get_by_title("Usuń z projektu").click()
+
+    def close(self) -> None:
+        self.close_button.click()
+        expect(self.overlay).to_be_hidden()
+
+
+class ProjectsPanel:
+    """'Projekty' panel on the dashboard: chips that filter tasks + members button."""
+
+    def __init__(self, page: Page) -> None:
+        self.page = page
+        self.root = page.locator(".panel", has=page.get_by_role("heading", name="Projekty"))
+        self.new_project_button = page.get_by_role("button", name="Nowy projekt")
+        self.chips = self.root.locator(".project-chip")
+
+    def chip(self, name: str) -> Locator:
+        return self.chips.filter(has_text=name)
+
+    def open_new_project_modal(self) -> ProjectModal:
+        self.new_project_button.click()
+        modal = ProjectModal(self.page)
+        expect(modal.root).to_be_visible()
+        return modal
+
+    def add_project(self, name: str) -> Locator:
+        """Creates a project through the modal and returns its chip."""
+        modal = self.open_new_project_modal()
+        modal.name_input.fill(name)
+        modal.submit()
+        return self.chip(name)
+
+    def select(self, name: str) -> None:
+        """Clicks the chip and waits for the project-filtered task list."""
+        with self.page.expect_response(lambda r: "/tasks/" in r.url and "project_id=" in r.url):
+            self.chip(name).click()
+        expect(self.chip(name)).to_have_class(ACTIVE_CLASS)
+
+    def open_members(self, name: str) -> MembersModal:
+        self.chip(name).get_by_title("Członkowie").click()
+        modal = MembersModal(self.page)
+        expect(modal.root).to_be_visible()
+        return modal
