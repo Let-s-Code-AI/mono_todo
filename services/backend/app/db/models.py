@@ -76,10 +76,10 @@ class Task(SQLModel, table=True):
     priority_reason: Optional[str] = Field(default=None, max_length=500)
     status: Status = Field(default=Status.TODO)
     owner_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
+    project_id: Optional[int] = Field(default=None, foreign_key="project.id", index=True)
     category_id: Optional[int] = Field(default=None, foreign_key="category.id", index=True)
     tags: Optional[List] = Field(default=None, sa_column=Column(JSON))
     ai_override: bool = Field(default=False)
     due_date: Optional[date] = Field(default=None)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-

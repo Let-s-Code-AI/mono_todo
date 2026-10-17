@@ -73,6 +73,7 @@ class TaskService:
             priority_reason=priority_reason,
             status=task_data.status,
             owner_id=owner_id,
+            project_id=task_data.project_id,
             category_id=task_data.category_id,
             tags=task_data.tags if task_data.tags else [],
             ai_override=ai_override,
@@ -83,11 +84,12 @@ class TaskService:
 
     def get_task(self, task_id: int, owner_id: Optional[int] = None) -> Optional[Task]:
         """
-        Get a task by ID, scoped to owner if provided.
+        Get a task by ID, scoped to a user if provided.
 
         Args:
             task_id: Task identifier
-            owner_id: If set, only return the task if it belongs to this user
+            owner_id: If set, only return the task if this user owns it or shares
+                it through project membership
 
         Returns:
             Task if found and accessible, None otherwise
@@ -102,19 +104,21 @@ class TaskService:
         limit: int = 100,
         owner_id: Optional[int] = None,
         category_id: Optional[int] = None,
+        project_id: Optional[int] = None,
         tag: Optional[str] = None,
         overdue: bool = False,
     ) -> list[Task]:
         """
-        Get tasks with optional filtering, scoped to owner if provided.
+        Get tasks with optional filtering, scoped to a user if provided.
 
         Args:
             status: Optional status filter
             priority: Optional priority filter
             skip: Number of records to skip
             limit: Maximum number of records to return
-            owner_id: If set, only return tasks belonging to this user
+            owner_id: If set, only return tasks this user owns or shares via a project
             category_id: Optional category filter
+            project_id: Optional project filter
             tag: Optional tag filter
             overdue: If True, return only tasks past their due_date and not done
 
@@ -128,6 +132,7 @@ class TaskService:
             limit=limit,
             owner_id=owner_id,
             category_id=category_id,
+            project_id=project_id,
             tag=tag,
             overdue=overdue,
         )
@@ -144,7 +149,7 @@ class TaskService:
 
         Args:
             days: Number of days to look ahead
-            owner_id: If set, only return tasks belonging to this user
+            owner_id: If set, only return tasks this user owns or shares via a project
             skip: Number of records to skip
             limit: Maximum number of records to return
 
@@ -162,7 +167,7 @@ class TaskService:
         Args:
             task_id: Task identifier
             task_data: Task update data
-            owner_id: If set, only update the task if it belongs to this user
+            owner_id: If set, only update the task if this user can access it
 
         Returns:
             Updated task if found and accessible, None otherwise
@@ -205,7 +210,7 @@ class TaskService:
 
         Args:
             task_id: Task identifier
-            owner_id: If set, only process the task if it belongs to this user
+            owner_id: If set, only process the task if this user can access it
 
         Returns:
             Updated task if found and accessible, None otherwise
@@ -244,7 +249,7 @@ class TaskService:
 
         Args:
             task_id: Task identifier
-            owner_id: If set, only delete the task if it belongs to this user
+            owner_id: If set, only delete the task if this user can access it
 
         Returns:
             True if deleted, False if not found or not accessible

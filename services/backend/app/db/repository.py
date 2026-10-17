@@ -3,7 +3,7 @@
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import func, text
+from sqlalchemy import func, or_, text
 from sqlmodel import Session, select
 
 from app.db.models import (
@@ -137,14 +137,24 @@ class TaskRepository:
         self.session.refresh(task)
         return task
 
+    def _is_project_member(self, project_id: int, user_id: int) -> bool:
+        return self.session.get(ProjectMember, (project_id, user_id)) is not None
+
+    def _accessible_by(self, statement, user_id: int):
+        """Restrict a Task query to tasks the user owns or shares through a project."""
+        member_projects = select(ProjectMember.project_id).where(ProjectMember.user_id == user_id)
+        return statement.where(or_(Task.owner_id == user_id, Task.project_id.in_(member_projects)))
+
     def get_by_id(self, task_id: int, owner_id: Optional[int] = None) -> Optional[Task]:
-        """Get a task by ID, optionally scoped to an owner."""
+        """Get a task by ID, optionally scoped to a user (owner or project member)."""
         task = self.session.get(Task, task_id)
         if task is None:
             return None
-        if owner_id is not None and task.owner_id != owner_id:
-            return None
-        return task
+        if owner_id is None or task.owner_id == owner_id:
+            return task
+        if task.project_id is not None and self._is_project_member(task.project_id, owner_id):
+            return task
+        return None
 
     def get_category(self, category_id: int) -> Optional[Category]:
         """Get a category by ID."""
@@ -158,6 +168,7 @@ class TaskRepository:
         limit: int = 100,
         owner_id: Optional[int] = None,
         category_id: Optional[int] = None,
+        project_id: Optional[int] = None,
         tag: Optional[str] = None,
         overdue: bool = False,
     ) -> list[Task]:
@@ -165,16 +176,20 @@ class TaskRepository:
         statement = select(Task)
 
         if owner_id is not None:
-            statement = statement.where(Task.owner_id == owner_id)
+            statement = self._accessible_by(statement, owner_id)
         if status:
             statement = statement.where(Task.status == status)
         if priority:
             statement = statement.where(Task.priority == priority)
         if category_id is not None:
             statement = statement.where(Task.category_id == category_id)
+        if project_id is not None:
+            statement = statement.where(Task.project_id == project_id)
         if tag is not None:
             statement = statement.where(
-                text("EXISTS (SELECT 1 FROM json_each(task.tags) WHERE value = :tag_val)").bindparams(tag_val=tag)
+                text(
+                    "EXISTS (SELECT 1 FROM json_each(task.tags) WHERE value = :tag_val)"
+                ).bindparams(tag_val=tag)
             )
         if overdue:
             today = date.today()
@@ -200,7 +215,7 @@ class TaskRepository:
             .where(Task.status != Status.DONE)
         )
         if owner_id is not None:
-            statement = statement.where(Task.owner_id == owner_id)
+            statement = self._accessible_by(statement, owner_id)
         statement = statement.order_by(Task.due_date).offset(skip).limit(limit)
         return list(self.session.exec(statement).all())
 
@@ -229,7 +244,7 @@ class TaskRepository:
         ).all()
 
     def delete(self, task_id: int, owner_id: Optional[int] = None) -> bool:
-        """Delete a task by ID, optionally scoped to an owner."""
+        """Delete a task by ID, optionally scoped to a user (owner or project member)."""
         task = self.get_by_id(task_id, owner_id=owner_id)
         if task:
             self.session.delete(task)

@@ -150,7 +150,8 @@ def remove_member(
 
     Raises:
         HTTPException: 404 if the project or the membership does not exist,
-            403 if the current user is not the project owner
+            403 if the current user is not the project owner,
+            400 when trying to remove the owner
     """
     error = service.remove_member(project_id, user_id, actor_id=current_user.id)
     if error:
@@ -164,6 +165,7 @@ _MEMBER_ERRORS: dict[MemberError, tuple[int, str]] = {
     MemberError.USER_NOT_FOUND: (404, "User not found"),
     MemberError.ALREADY_MEMBER: (409, "User is already a member of this project"),
     MemberError.MEMBER_NOT_FOUND: (404, "User is not a member of this project"),
+    MemberError.CANNOT_REMOVE_OWNER: (400, "The project owner cannot be removed"),
 }
 
 

@@ -34,7 +34,7 @@ alembic downgrade -1
 
 ## Development Workflow: TDD
 
-Every change to `app/` follows the `tdd` skill (`.claude/skills/tdd/SKILL.md`): **red → green → refactor**.
+Every change to `app/` follows the `tdd` skill (`services/backend/.claude/skills/tdd/SKILL.md`): **red → green → refactor**.
 
 - Before coding, write a checklist of observable behaviors; each item becomes one test.
 - Write one failing test, run it, confirm it fails for the right reason. No production code before that.

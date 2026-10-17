@@ -17,6 +17,7 @@ class MemberError(str, Enum):
     USER_NOT_FOUND = "user_not_found"
     ALREADY_MEMBER = "already_member"
     MEMBER_NOT_FOUND = "member_not_found"
+    CANNOT_REMOVE_OWNER = "cannot_remove_owner"
 
 
 class ProjectService:
@@ -78,5 +79,7 @@ class ProjectService:
         member = self.repository.get_member(project_id, user_id)
         if not member:
             return MemberError.MEMBER_NOT_FOUND
+        if member.role == ProjectRole.OWNER:
+            return MemberError.CANNOT_REMOVE_OWNER
         self.repository.remove_member(member)
         return None

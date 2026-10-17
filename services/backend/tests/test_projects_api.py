@@ -6,10 +6,20 @@ BDD scenarios for:
   - Project-scoped task visibility
 """
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.db.models import Project, User
+from app.services.ai_priority_service import _PRIORITY_CACHE
+
+
+@pytest.fixture(autouse=True)
+def clear_priority_cache():
+    """Clear the shared priority cache before each test."""
+    _PRIORITY_CACHE.clear()
+    yield
+    _PRIORITY_CACHE.clear()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -57,9 +67,7 @@ def _create_project(client: TestClient, name: str = "Projekt") -> int:
     return response.json()["id"]
 
 
-def test_add_member_by_email_as_owner_returns_201(
-    client: TestClient, other_user: User
-) -> None:
+def test_add_member_by_email_as_owner_returns_201(client: TestClient, other_user: User) -> None:
     """Scenario: Owner dodaje istniejącego użytkownika do projektu po emailu."""
     project_id = _create_project(client)
 
@@ -81,7 +89,9 @@ def test_add_member_as_non_owner_returns_403(
     test_db.add(User(email="third@example.com", hashed_password="x"))
     test_db.commit()
 
-    response = other_client.post(f"/projects/{project_id}/members", json={"email": "third@example.com"})
+    response = other_client.post(
+        f"/projects/{project_id}/members", json={"email": "third@example.com"}
+    )
 
     assert response.status_code == 403
 
@@ -166,3 +176,113 @@ def test_remove_member_as_non_owner_returns_403(
     response = other_client.delete(f"/projects/{project_id}/members/{third.id}")
 
     assert response.status_code == 403
+
+
+def test_remove_owner_returns_400(client: TestClient, test_user: User) -> None:
+    """Scenario: Owner próbuje usunąć samego siebie z projektu."""
+    project_id = _create_project(client)
+
+    response = client.delete(f"/projects/{project_id}/members/{test_user.id}")
+
+    assert response.status_code == 400
+    assert client.get(f"/projects/{project_id}/members").status_code == 200
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Project-scoped tasks
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_create_task_in_project_as_member_returns_201_with_project_id(
+    client: TestClient,
+) -> None:
+    """Scenario: Członek projektu tworzy zadanie przypisane do projektu."""
+    project_id = _create_project(client)
+
+    response = client.post("/tasks/", json={"title": "Kupić farbę", "project_id": project_id})
+
+    assert response.status_code == 201
+    assert response.json()["project_id"] == project_id
+
+
+def test_create_task_in_project_as_non_member_returns_403(
+    client: TestClient, other_client: TestClient
+) -> None:
+    """Scenario: Użytkownik spoza projektu próbuje dodać do niego zadanie."""
+    project_id = _create_project(client)
+
+    response = other_client.post("/tasks/", json={"title": "Obce", "project_id": project_id})
+
+    assert response.status_code == 403
+
+
+def test_create_task_in_unknown_project_returns_404(client: TestClient) -> None:
+    """Scenario: Tworzenie zadania w projekcie, który nie istnieje."""
+    response = client.post("/tasks/", json={"title": "Nigdzie", "project_id": 9999})
+
+    assert response.status_code == 404
+
+
+def test_member_sees_project_tasks_created_by_other_members(
+    client: TestClient, other_client: TestClient, other_user: User
+) -> None:
+    """Scenario: Zadanie dodane przez ownera jest widoczne dla członka projektu."""
+    project_id = _create_project(client)
+    client.post(f"/projects/{project_id}/members", json={"email": other_user.email})
+    client.post("/tasks/", json={"title": "Wspólne zadanie", "project_id": project_id})
+    other_client.post("/tasks/", json={"title": "Moje prywatne"})
+
+    response = other_client.get("/tasks/")
+
+    assert response.status_code == 200
+    titles = sorted(t["title"] for t in response.json())
+    assert titles == ["Moje prywatne", "Wspólne zadanie"]
+
+
+def _shared_project_with_task(
+    client: TestClient, other_client: TestClient, other_user: User
+) -> tuple[int, int]:
+    """Owner creates a project, adds other_user and one task; returns (project_id, task_id)."""
+    project_id = _create_project(client)
+    client.post(f"/projects/{project_id}/members", json={"email": other_user.email})
+    task = client.post("/tasks/", json={"title": "Wspólne", "project_id": project_id}).json()
+    return project_id, task["id"]
+
+
+def test_member_can_get_and_update_project_task(
+    client: TestClient, other_client: TestClient, other_user: User
+) -> None:
+    """Scenario: Członek projektu czyta i edytuje zadanie dodane przez ownera."""
+    _, task_id = _shared_project_with_task(client, other_client, other_user)
+
+    get_response = other_client.get(f"/tasks/{task_id}")
+    patch_response = other_client.patch(f"/tasks/{task_id}", json={"status": "done"})
+
+    assert get_response.status_code == 200
+    assert patch_response.status_code == 200
+    assert patch_response.json()["status"] == "done"
+
+
+def test_non_member_cannot_see_project_task(
+    client: TestClient, other_client: TestClient, test_db: Session
+) -> None:
+    """Scenario: Zadanie z projektu jest niewidoczne dla osoby spoza projektu."""
+    project_id = _create_project(client)
+    task = client.post("/tasks/", json={"title": "Tajne", "project_id": project_id}).json()
+
+    response = other_client.get(f"/tasks/{task['id']}")
+
+    assert response.status_code == 404
+    assert [t["title"] for t in other_client.get("/tasks/").json()] == []
+
+
+def test_filter_tasks_by_project_id(client: TestClient) -> None:
+    """Scenario: Lista zadań zawężona do jednego projektu."""
+    project_id = _create_project(client)
+    client.post("/tasks/", json={"title": "W projekcie", "project_id": project_id})
+    client.post("/tasks/", json={"title": "Poza projektem"})
+
+    response = client.get("/tasks/", params={"project_id": project_id})
+
+    assert response.status_code == 200
+    assert [t["title"] for t in response.json()] == ["W projekcie"]

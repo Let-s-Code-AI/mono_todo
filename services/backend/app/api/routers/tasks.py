@@ -6,9 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session
 
 from app.api.deps import get_current_admin_user, get_current_user
+from app.api.routers.projects import get_project_repository
 from app.core.config import settings
 from app.db.models import Category, Priority, Status, User
-from app.db.repository import CategoryRepository, TaskRepository
+from app.db.repository import CategoryRepository, ProjectRepository, TaskRepository
 from app.db.session import get_session
 from app.schemas.task import (
     PriorityAnalysisRequest,
@@ -32,14 +33,18 @@ class TaskListParams:
         status: Optional[Status] = Query(default=None, description="Filter by status"),
         priority: Optional[Priority] = Query(default=None, description="Filter by priority"),
         category_id: Optional[int] = Query(default=None, description="Filter by category ID"),
+        project_id: Optional[int] = Query(default=None, description="Filter by project ID"),
         tag: Optional[str] = Query(default=None, description="Filter by tag"),
-        overdue: bool = Query(default=False, description="Return only overdue tasks (past due_date, not done)"),
+        overdue: bool = Query(
+            default=False, description="Return only overdue tasks (past due_date, not done)"
+        ),
         skip: int = Query(default=0, ge=0, description="Number of records to skip"),
         limit: int = Query(default=100, ge=1, le=1000, description="Maximum number of records"),
     ):
         self.status = status
         self.priority = priority
         self.category_id = category_id
+        self.project_id = project_id
         self.tag = tag
         self.overdue = overdue
         self.skip = skip
@@ -66,6 +71,18 @@ def get_task_service(
     return TaskService(repository, ai_service)
 
 
+def _ensure_project_member(
+    project_id: Optional[int], user_id: int, project_repository: ProjectRepository
+) -> None:
+    """Raise 404 if the project does not exist, 403 if the user is not one of its members."""
+    if project_id is None:
+        return
+    if not project_repository.get_by_id(project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    if not project_repository.get_member(project_id, user_id):
+        raise HTTPException(status_code=403, detail="Not a member of this project")
+
+
 def _get_category_name(category_id: Optional[int], session: Session) -> Optional[str]:
     """Resolve category name from ID."""
     if not category_id:
@@ -80,6 +97,7 @@ async def create_task(
     use_ai_priority: bool = Query(default=False, description="Use AI for priority suggestion"),
     service: TaskService = Depends(get_task_service),
     session: Session = Depends(get_session),
+    project_repository: ProjectRepository = Depends(get_project_repository),
     current_user: User = Depends(get_current_user),
 ) -> TaskResponse:
     """
@@ -90,14 +108,17 @@ async def create_task(
         use_ai_priority: Whether to use AI for priority suggestion
         service: Task service dependency
         session: Database session
+        project_repository: Project repository for membership checks
         current_user: Authenticated user
 
     Returns:
         Created task
 
     Raises:
-        HTTPException: 404 if category_id does not exist
+        HTTPException: 404 if category_id or project_id does not exist,
+            403 if the user is not a member of the given project
     """
+    _ensure_project_member(task_data.project_id, current_user.id, project_repository)
     if task_data.category_id is not None:
         category = session.get(Category, task_data.category_id)
         if not category:
@@ -150,7 +171,7 @@ def get_tasks(
         current_user: Authenticated user
 
     Returns:
-        List of tasks belonging to the current user
+        Tasks the current user owns or shares through project membership
     """
     tasks = service.get_tasks(
         status=params.status,
@@ -159,6 +180,7 @@ def get_tasks(
         limit=params.limit,
         owner_id=current_user.id,
         category_id=params.category_id,
+        project_id=params.project_id,
         tag=params.tag,
         overdue=params.overdue,
     )
@@ -187,6 +209,7 @@ def admin_get_all_tasks(
         skip=params.skip,
         limit=params.limit,
         category_id=params.category_id,
+        project_id=params.project_id,
         tag=params.tag,
         overdue=params.overdue,
     )
@@ -239,7 +262,7 @@ def get_task(
     current_user: User = Depends(get_current_user),
 ) -> TaskResponse:
     """
-    Get a task by ID (must belong to the authenticated user).
+    Get a task by ID (owned by the user or shared via a project).
 
     Args:
         task_id: Task identifier
@@ -250,7 +273,7 @@ def get_task(
         Task details
 
     Raises:
-        HTTPException: If task not found or not owned by current user
+        HTTPException: 404 if task not found or not accessible to the current user
     """
     task = service.get_task(task_id, owner_id=current_user.id)
     if not task:
@@ -267,7 +290,7 @@ async def update_task(
     current_user: User = Depends(get_current_user),
 ) -> TaskResponse:
     """
-    Update an existing task (must belong to the authenticated user).
+    Update an existing task (owned by the user or shared via a project).
 
     Args:
         task_id: Task identifier
@@ -280,7 +303,7 @@ async def update_task(
         Updated task
 
     Raises:
-        HTTPException: If task not found or not owned by current user
+        HTTPException: 404 if task not found or not accessible to the current user
     """
     if task_data.category_id is not None:
         category = session.get(Category, task_data.category_id)
@@ -367,7 +390,7 @@ async def reanalyze_task_priority(
         Updated task with new priority and reason
 
     Raises:
-        HTTPException: If task not found or not owned by current user
+        HTTPException: 404 if task not found or not accessible to the current user
     """
     updated_task = await service.reanalyze_priority(task_id, owner_id=current_user.id)
     if not updated_task:
@@ -382,7 +405,7 @@ def delete_task(
     current_user: User = Depends(get_current_user),
 ) -> None:
     """
-    Delete a task by ID (must belong to the authenticated user).
+    Delete a task by ID (owned by the user or shared via a project).
 
     Args:
         task_id: Task identifier
@@ -390,7 +413,7 @@ def delete_task(
         current_user: Authenticated user
 
     Raises:
-        HTTPException: If task not found or not owned by current user
+        HTTPException: 404 if task not found or not accessible to the current user
     """
     deleted = service.delete_task(task_id, owner_id=current_user.id)
     if not deleted:

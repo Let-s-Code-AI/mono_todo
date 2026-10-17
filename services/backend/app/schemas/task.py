@@ -48,6 +48,7 @@ class TaskCreate(TaskBase):
     """Schema for creating a new task."""
 
     category_id: Optional[int] = None
+    project_id: Optional[int] = None
     tags: list[str] = []
     due_date: Optional[date] = None
 
@@ -73,6 +74,7 @@ class TaskResponse(TaskBase):
     created_at: datetime
     updated_at: datetime
     category: Optional[CategoryResponse] = None
+    project_id: Optional[int] = None
     tags: list[str] = []
     ai_override: bool = False
 
