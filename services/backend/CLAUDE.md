@@ -63,6 +63,8 @@ Realtime (projects over WebSocket):
 WS endpoint     app/api/routers/projects_ws.py  /ws/projects — auth by ?token=, snapshot, commands, push events
 Connections     app/api/realtime.py             ConnectionManager on app.state (set in lifespan), fan-out per user
 Messages        app/schemas/realtime.py         Commands (client→server) and events/replies (server→client)
+Task events     app/api/task_events.py          TaskNotifier: REST task mutations queue task_created/updated/deleted
+                                                (BackgroundTasks) for the owner and the project's members
 ```
 
 The WebSocket handler is `async def`; every service call runs through `run_in_threadpool`, and the
