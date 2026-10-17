@@ -89,10 +89,10 @@ class OpenAIPriorityService:
             return result
 
         try:
-            from openai import OpenAI
+            from openai import AsyncOpenAI
 
             if self._client is None:
-                self._client = OpenAI(api_key=self.api_key)
+                self._client = AsyncOpenAI(api_key=self.api_key)
 
             content = f"Title: {title}"
             if description:
@@ -102,7 +102,7 @@ class OpenAIPriorityService:
             if due_date:
                 content += f"\nDue date: {due_date}"
 
-            response = self._client.chat.completions.create(
+            response = await self._client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
                     {

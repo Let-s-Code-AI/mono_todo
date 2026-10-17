@@ -10,6 +10,7 @@ export default defineConfig({
       '/tasks': 'http://localhost:8000',
       '/categories': 'http://localhost:8000',
       '/projects': 'http://localhost:8000',
+      '/ws': { target: 'ws://localhost:8000', ws: true },
     }
   }
 })

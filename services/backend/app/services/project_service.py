@@ -34,6 +34,10 @@ class ProjectService:
         """Return projects the user belongs to."""
         return self.repository.get_for_user(user_id)
 
+    def get_project(self, project_id: int) -> Project | None:
+        """Return a project by id, or None when it does not exist."""
+        return self.repository.get_by_id(project_id)
+
     def _is_owner(self, project_id: int, user_id: int) -> bool:
         member = self.repository.get_member(project_id, user_id)
         return member is not None and member.role == ProjectRole.OWNER

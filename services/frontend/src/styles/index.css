@@ -662,6 +662,28 @@ body {
 .cat-chip .cat-del:hover { color: var(--red); }
 
 /* ── Projects & members ── */
+.panel-title { display: flex; align-items: center; gap: 10px; }
+
+.live-status {
+  font-size: 11px;
+  color: var(--text2);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.live-status::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text2);
+}
+
+.live-status.live-online::before { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.live-status.live-connecting::before { background: var(--yellow); animation: pulse 1s infinite; }
+.live-status.live-offline::before { background: var(--red); }
+
 .panel-empty { font-size: 12px; color: var(--text2); }
 
 .badge-project {

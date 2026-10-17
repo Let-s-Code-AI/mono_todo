@@ -111,24 +111,110 @@ export const api = {
     return request('DELETE', `/categories/${id}`)
   },
 
-  // Projects
-  getProjects() {
-    return request('GET', '/projects/')
-  },
+  // Projects — live over WebSocket, see connectProjects below
+  connectProjects,
+}
 
-  createProject(name) {
-    return request('POST', '/projects/', { name })
-  },
+// ── Projects over WebSocket ───────────────────────────────────────────────────
+// Protocol (see backend app/schemas/realtime.py):
+//   client → server: { type: 'create_project' | 'list_members' | 'add_member' | 'remove_member', request_id, ... }
+//   server → client: 'projects' (snapshot), 'project_added', 'project_removed', 'members',
+//                    'member_added', 'member_removed', 'ack', 'error' — replies echo request_id.
 
-  getProjectMembers(projectId) {
-    return request('GET', `/projects/${projectId}/members`)
-  },
+const WS_UNAUTHORIZED = 4401
+const WS_RECONNECT_MAX_MS = 30000
 
-  addProjectMember(projectId, email) {
-    return request('POST', `/projects/${projectId}/members`, { email })
-  },
+const WS_ERROR_LABEL = {
+  project_not_found: 'Projekt nie istnieje',
+  not_member: 'Nie jesteś członkiem tego projektu',
+  not_owner: 'Tylko właściciel projektu może zarządzać członkami',
+  user_not_found: 'Nie ma użytkownika o tym adresie email',
+  already_member: 'Ten użytkownik już należy do projektu',
+  member_not_found: 'Ten użytkownik nie należy do projektu',
+  cannot_remove_owner: 'Nie można usunąć właściciela projektu',
+  invalid_message: 'Nieprawidłowe polecenie',
+}
 
-  removeProjectMember(projectId, userId) {
-    return request('DELETE', `/projects/${projectId}/members/${userId}`)
-  },
+function projectsSocketUrl() {
+  const protocol = location.protocol === 'https:' ? 'wss' : 'ws'
+  return `${protocol}://${location.host}/ws/projects?token=${encodeURIComponent(getToken() ?? '')}`
+}
+
+/**
+ * Opens the projects WebSocket and keeps it alive (reconnects with backoff).
+ *
+ * onMessage(msg)  — every server event except ack/error
+ * onStatus(s)     — 'connecting' | 'online' | 'offline' | 'unauthorized' (token rejected, no retry)
+ *
+ * Returns { send(command) → Promise resolved with the reply or rejected with Error, close() }.
+ */
+function connectProjects({ onMessage, onStatus }) {
+  let socket = null
+  let closed = false
+  let attempt = 0
+  let reconnectTimer = null
+  let nextRequestId = 1
+  const pending = new Map() // request_id → { resolve, reject }
+
+  function failPending(reason) {
+    for (const { reject } of pending.values()) reject(new Error(reason))
+    pending.clear()
+  }
+
+  function handleMessage(event) {
+    const msg = JSON.parse(event.data)
+    const waiter = msg.request_id ? pending.get(msg.request_id) : null
+    if (waiter) {
+      pending.delete(msg.request_id)
+      if (msg.type === 'error') waiter.reject(new Error(WS_ERROR_LABEL[msg.code] ?? msg.detail))
+      else waiter.resolve(msg)
+    }
+    if (msg.type === 'error' && !waiter) console.warn('projects socket:', msg.detail)
+    if (msg.type !== 'ack' && msg.type !== 'error') onMessage(msg)
+  }
+
+  function open() {
+    if (closed) return
+    onStatus('connecting')
+    socket = new WebSocket(projectsSocketUrl())
+    socket.onopen = () => {
+      attempt = 0
+      onStatus('online')
+    }
+    socket.onmessage = handleMessage
+    socket.onclose = event => {
+      socket = null
+      failPending('Połączenie z serwerem zostało przerwane')
+      if (closed) return
+      if (event.code === WS_UNAUTHORIZED) {
+        onStatus('unauthorized')
+        return
+      }
+      onStatus('offline')
+      const delay = Math.min(1000 * 2 ** attempt, WS_RECONNECT_MAX_MS)
+      attempt += 1
+      reconnectTimer = setTimeout(open, delay)
+    }
+  }
+
+  open()
+
+  return {
+    send(command) {
+      return new Promise((resolve, reject) => {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          reject(new Error('Brak połączenia z serwerem'))
+          return
+        }
+        const request_id = String(nextRequestId++)
+        pending.set(request_id, { resolve, reject })
+        socket.send(JSON.stringify({ ...command, request_id }))
+      })
+    },
+    close() {
+      closed = true
+      clearTimeout(reconnectTimer)
+      socket?.close()
+    },
+  }
 }

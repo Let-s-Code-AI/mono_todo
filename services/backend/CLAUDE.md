@@ -69,7 +69,7 @@ Layer rules:
 
 `app/services/ai_priority_service.py` defines a `AIPriorityService` Protocol with two implementations:
 
-- `OpenAIPriorityService` — calls GPT-3.5-turbo; uses in-memory caching
+- `OpenAIPriorityService` — calls GPT-3.5-turbo through `AsyncOpenAI` (awaited, never blocks the event loop); uses in-memory caching
 - `MockAIPriorityService` — heuristic fallback using keyword matching (Polish + English)
 
 The mock is always used in tests (via dependency override in `conftest.py`). The real service activates only when `OPENAI_API_KEY` is set. AI can override user-set priority for detected critical cases (urgent/exam keywords).

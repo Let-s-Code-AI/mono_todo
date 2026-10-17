@@ -158,7 +158,7 @@ def remove_member(
         raise _member_error_to_http(error)
 
 
-_MEMBER_ERRORS: dict[MemberError, tuple[int, str]] = {
+MEMBER_ERRORS: dict[MemberError, tuple[int, str]] = {
     MemberError.PROJECT_NOT_FOUND: (404, "Project not found"),
     MemberError.NOT_MEMBER: (403, "Not a member of this project"),
     MemberError.NOT_OWNER: (403, "Only the project owner can manage members"),
@@ -171,5 +171,5 @@ _MEMBER_ERRORS: dict[MemberError, tuple[int, str]] = {
 
 def _member_error_to_http(error: MemberError) -> HTTPException:
     """Translate a service-level membership error into an HTTPException."""
-    status_code, detail = _MEMBER_ERRORS[error]
+    status_code, detail = MEMBER_ERRORS[error]
     return HTTPException(status_code=status_code, detail=detail)

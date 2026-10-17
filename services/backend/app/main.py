@@ -5,7 +5,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routers import auth, categories, projects, tasks
+from app.api.realtime import ConnectionManager
+from app.api.routers import auth, categories, projects, projects_ws, tasks
 from app.db.session import create_db_and_tables
 
 
@@ -14,6 +15,7 @@ async def lifespan(app: FastAPI):
     """Manage application lifespan events."""
     # Startup
     create_db_and_tables()
+    app.state.connection_manager = ConnectionManager()
     yield
     # Shutdown (if needed)
 
@@ -36,6 +38,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(categories.router)
 app.include_router(projects.router)
+app.include_router(projects_ws.router)
 app.include_router(tasks.router)
 
 
