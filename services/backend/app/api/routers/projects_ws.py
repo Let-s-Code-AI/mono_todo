@@ -36,7 +36,7 @@ from app.schemas.realtime import (
     RemoveMemberCommand,
     command_adapter,
 )
-from app.services.project_service import MemberError, ProjectService
+from app.services.project_service import MemberError, ProjectService, UnknownEmail
 
 router = APIRouter(tags=["projects"])
 
@@ -153,9 +153,21 @@ def _execute(
 def _create_project(
     command: CreateProjectCommand, user_id: int, service: ProjectService
 ) -> tuple[BaseModel, list[Outgoing]]:
-    project = service.create_project(ProjectCreate(name=command.name), owner_id=user_id)
+    result = service.create_project_with_members(
+        ProjectCreate(name=command.name), owner_id=user_id, member_emails=command.member_emails
+    )
+    if isinstance(result, UnknownEmail):
+        error = ErrorMessage(
+            request_id=command.request_id,
+            code=MemberError.USER_NOT_FOUND.value,
+            detail=f"User not found: {result.email}",
+            email=result.email,
+        )
+        return error, []
+    project, members = result
     added = ProjectAdded(project=ProjectResponse.model_validate(project))
-    return Ack(request_id=command.request_id), [([user_id], added)]
+    recipients = [user_id, *(member.id for member in members)]
+    return Ack(request_id=command.request_id), [(recipients, added)]
 
 
 def _list_members(

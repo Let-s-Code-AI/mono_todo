@@ -28,6 +28,7 @@ wheels/
 *.sqlite3
 test_todo.db
 .pytest_cache/
+.ruff_cache/
 .coverage
 htmlcov/
 .tox/

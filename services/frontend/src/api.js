@@ -118,6 +118,7 @@ export const api = {
 // ── Projects over WebSocket ───────────────────────────────────────────────────
 // Protocol (see backend app/schemas/realtime.py):
 //   client → server: { type: 'create_project' | 'list_members' | 'add_member' | 'remove_member', request_id, ... }
+//                    create_project may carry member_emails: [] — registered users added as members at once
 //   server → client: 'projects' (snapshot), 'project_added', 'project_removed', 'members',
 //                    'member_added', 'member_removed', 'ack', 'error' — replies echo request_id.
 
@@ -133,6 +134,12 @@ const WS_ERROR_LABEL = {
   member_not_found: 'Ten użytkownik nie należy do projektu',
   cannot_remove_owner: 'Nie można usunąć właściciela projektu',
   invalid_message: 'Nieprawidłowe polecenie',
+}
+
+// Polish label for a server error; `email` (user_not_found) names the offending address.
+function describeError(msg) {
+  const label = WS_ERROR_LABEL[msg.code] ?? msg.detail
+  return msg.email ? `${label}: ${msg.email}` : label
 }
 
 function projectsSocketUrl() {
@@ -166,7 +173,7 @@ function connectProjects({ onMessage, onStatus }) {
     const waiter = msg.request_id ? pending.get(msg.request_id) : null
     if (waiter) {
       pending.delete(msg.request_id)
-      if (msg.type === 'error') waiter.reject(new Error(WS_ERROR_LABEL[msg.code] ?? msg.detail))
+      if (msg.type === 'error') waiter.reject(new Error(describeError(msg)))
       else waiter.resolve(msg)
     }
     if (msg.type === 'error' && !waiter) console.warn('projects socket:', msg.detail)

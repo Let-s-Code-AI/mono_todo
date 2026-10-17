@@ -4,6 +4,7 @@ Scenarios:
   - Authentication by token in the query string
   - Snapshot of the user's projects on connect
   - Commands (create_project, list_members, add_member, remove_member) with ack / error replies
+  - create_project with member_emails: members added atomically, unknown email creates nothing
   - Push events delivered to other members' connections
 """
 
@@ -114,6 +115,7 @@ def test_add_member_with_unknown_email_returns_error(client: TestClient, test_us
         "request_id": "r1",
         "code": "user_not_found",
         "detail": "User not found",
+        "email": None,
     }
 
 
@@ -231,3 +233,118 @@ def test_connection_sees_changes_made_through_rest(
 
     assert reply["type"] == "error"
     assert reply["code"] == "not_member"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Create project with initial members
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_create_project_with_member_emails_adds_members_and_notifies_them(
+    client: TestClient, test_user: User, other_user: User
+) -> None:
+    """Scenario: create_project z member_emails dodaje członków i wysyła im project_added."""
+    with (
+        client.websocket_connect(_socket_url(test_user)) as owner_socket,
+        client.websocket_connect(_socket_url(other_user)) as member_socket,
+    ):
+        owner_socket.receive_json()
+        member_socket.receive_json()
+        owner_socket.send_json(
+            {
+                "type": "create_project",
+                "request_id": "r1",
+                "name": "Remont",
+                "member_emails": [other_user.email],
+            }
+        )
+        owner_added = owner_socket.receive_json()
+        ack = owner_socket.receive_json()
+        project_id = owner_added["project"]["id"]
+        # REST check first so a missing push fails the test instead of blocking on receive.
+        assert client.get(f"/projects/{project_id}/members").json() == [
+            _member(test_user, "owner"),
+            _member(other_user, "member"),
+        ]
+        member_added = member_socket.receive_json()
+
+    assert ack == {"type": "ack", "request_id": "r1"}
+    assert owner_added["type"] == "project_added"
+    assert member_added == owner_added
+
+
+def test_create_project_with_unknown_email_creates_nothing(
+    client: TestClient, test_user: User
+) -> None:
+    """Scenario: Nieznany email w member_emails zwraca error z tym emailem; projekt nie powstaje."""
+    with client.websocket_connect(_socket_url(test_user)) as socket:
+        socket.receive_json()
+        socket.send_json(
+            {
+                "type": "create_project",
+                "request_id": "r1",
+                "name": "Remont",
+                "member_emails": ["nobody@example.com"],
+            }
+        )
+        reply = socket.receive_json()
+
+    assert reply == {
+        "type": "error",
+        "request_id": "r1",
+        "code": "user_not_found",
+        "detail": "User not found: nobody@example.com",
+        "email": "nobody@example.com",
+    }
+    assert client.get("/projects/").json() == []
+
+
+def test_create_project_ignores_blank_duplicate_and_own_email(
+    client: TestClient, test_user: User, other_user: User
+) -> None:
+    """Scenario: Puste wpisy, duplikaty i własny email właściciela są pomijane bez błędu."""
+    with client.websocket_connect(_socket_url(test_user)) as socket:
+        socket.receive_json()
+        socket.send_json(
+            {
+                "type": "create_project",
+                "request_id": "r1",
+                "name": "Remont",
+                "member_emails": [
+                    f" {other_user.email} ",
+                    other_user.email,
+                    test_user.email,
+                    "   ",
+                ],
+            }
+        )
+        added = socket.receive_json()
+        ack = socket.receive_json()
+
+    assert ack == {"type": "ack", "request_id": "r1"}
+    project_id = added["project"]["id"]
+    assert client.get(f"/projects/{project_id}/members").json() == [
+        _member(test_user, "owner"),
+        _member(other_user, "member"),
+    ]
+
+
+def test_create_project_with_too_many_emails_is_rejected(
+    client: TestClient, test_user: User
+) -> None:
+    """Scenario: Więcej niż 20 emaili to invalid_message, projekt nie powstaje."""
+    with client.websocket_connect(_socket_url(test_user)) as socket:
+        socket.receive_json()
+        socket.send_json(
+            {
+                "type": "create_project",
+                "request_id": "r1",
+                "name": "Remont",
+                "member_emails": [f"user{i}@example.com" for i in range(21)],
+            }
+        )
+        reply = socket.receive_json()
+
+    assert reply["type"] == "error"
+    assert reply["code"] == "invalid_message"
+    assert client.get("/projects/").json() == []

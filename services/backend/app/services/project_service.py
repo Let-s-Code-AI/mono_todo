@@ -1,5 +1,6 @@
 """Business logic layer for projects and project membership."""
 
+from dataclasses import dataclass
 from enum import Enum
 
 from app.db.models import Project, ProjectMember, ProjectRole, User
@@ -19,6 +20,13 @@ class MemberError(str, Enum):
     CANNOT_REMOVE_OWNER = "cannot_remove_owner"
 
 
+@dataclass(frozen=True)
+class UnknownEmail:
+    """A requested member email that belongs to no registered user."""
+
+    email: str
+
+
 class ProjectService:
     """Service layer for project business logic."""
 
@@ -29,6 +37,30 @@ class ProjectService:
     def create_project(self, data: ProjectCreate, owner_id: int) -> Project:
         """Create a project owned by the given user."""
         return self.repository.create(Project(name=data.name, owner_id=owner_id))
+
+    def create_project_with_members(
+        self, data: ProjectCreate, owner_id: int, member_emails: list[str]
+    ) -> tuple[Project, list[User]] | UnknownEmail:
+        """
+        Create a project and add the users with the given emails as members.
+
+        All emails are resolved before anything is written, so an unknown email means
+        no project is created. The owner's own email and repeated users are skipped.
+
+        Returns:
+            (project, added users) on success, or the first UnknownEmail.
+        """
+        members: dict[int, User] = {}
+        for email in member_emails:
+            user = self.user_repository.get_by_email(email)
+            if not user:
+                return UnknownEmail(email)
+            if user.id != owner_id:
+                members[user.id] = user
+        project = self.create_project(data, owner_id)
+        for user in members.values():
+            self.repository.add_member(project.id, user.id)
+        return project, list(members.values())
 
     def list_projects(self, user_id: int) -> list[Project]:
         """Return projects the user belongs to."""

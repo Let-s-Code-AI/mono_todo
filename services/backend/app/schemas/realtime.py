@@ -7,22 +7,36 @@ member of the affected project.
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, TypeAdapter
+from pydantic import BaseModel, Field, TypeAdapter, field_validator
 
 from app.schemas.project import MemberResponse, ProjectResponse
 
 RequestId = Annotated[str, Field(min_length=1, max_length=64)]
+Email = Annotated[str, Field(max_length=255)]
+
+MAX_INITIAL_MEMBERS = 20
 
 
 # ── Commands: client → server ───────────────────────────────────────────────
 
 
 class CreateProjectCommand(BaseModel):
-    """Create a project owned by the connected user."""
+    """Create a project owned by the connected user, optionally with initial members.
+
+    `member_emails` must all belong to registered users, otherwise nothing is created
+    and the reply is an `error` with code `user_not_found` naming the unknown email.
+    """
 
     type: Literal["create_project"]
     request_id: RequestId
     name: str = Field(min_length=1, max_length=100)
+    member_emails: list[Email] = Field(default_factory=list, max_length=MAX_INITIAL_MEMBERS)
+
+    @field_validator("member_emails")
+    @classmethod
+    def _strip_and_dedupe(cls, emails: list[str]) -> list[str]:
+        """Drop surrounding whitespace, blank entries and repeated emails (order kept)."""
+        return [email for email in dict.fromkeys(e.strip() for e in emails) if email]
 
 
 class ListMembersCommand(BaseModel):
@@ -116,9 +130,14 @@ class Ack(BaseModel):
 
 
 class ErrorMessage(BaseModel):
-    """The command with `request_id` failed; `code` is machine-readable."""
+    """The command with `request_id` failed; `code` is machine-readable.
+
+    `email` names the address the error is about (set for `user_not_found` when the
+    command carried several emails).
+    """
 
     type: Literal["error"] = "error"
     request_id: str | None = None
     code: str
     detail: str
+    email: str | None = None

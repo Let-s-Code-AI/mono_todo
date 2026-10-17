@@ -136,6 +136,18 @@ def test_list_members_returns_owner_and_members_with_roles(
     assert members == {test_user.email: "owner", other_user.email: "member"}
 
 
+def test_list_members_puts_owner_first_regardless_of_id(
+    client: TestClient, other_client: TestClient, test_user: User
+) -> None:
+    """Scenario: Właściciel jest pierwszy na liście, nawet gdy ma wyższe id niż członek."""
+    project_id = _create_project(other_client)
+    other_client.post(f"/projects/{project_id}/members", json={"email": test_user.email})
+
+    roles = [m["role"] for m in client.get(f"/projects/{project_id}/members").json()]
+
+    assert roles == ["owner", "member"]
+
+
 def test_list_members_as_non_member_returns_403(
     client: TestClient, other_client: TestClient
 ) -> None:

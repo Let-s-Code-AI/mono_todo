@@ -1,6 +1,7 @@
 """E2E tests – Projects and members (Playwright + pytest)
 Coverage:
   - Create project: modal (+ Nowy projekt) → name → appears as a chip in the 'Projekty' panel
+  - Create project with members: emails typed in the modal become members; unknown email blocks creation
   - Members: add an existing user by email, error for unknown email, remove a member
   - Tasks in a project: select project in the task modal → project chip filters the list
   - Realtime: a second user sees the project appear and disappear without reloading (WebSocket push)
@@ -95,6 +96,33 @@ class TestCreateProject:
 
         modal.cancel_button.click()
         expect(modal.overlay).to_be_hidden()
+
+    def test_create_project_with_members(
+        self, dashboard: DashboardPage, projects: ProjectsPanel, other_user_email: str
+    ):
+        """Emails typed in 'Zaproś użytkowników' become 'Członek' rows of the new project."""
+        name = unique_name()
+
+        chip = projects.add_project(name, member_emails=[other_user_email])
+
+        expect(chip).to_be_visible()
+        expect(dashboard.toast("dodano 1 członka")).to_be_visible()
+        modal = projects.open_members(name)
+        expect(modal.member_row(other_user_email)).to_contain_text("Członek")
+
+    def test_create_project_with_unknown_email_shows_error(self, projects: ProjectsPanel):
+        """An unregistered email keeps the modal open with an error naming it; no project is created."""
+        name = unique_name()
+        modal = projects.open_new_project_modal()
+        modal.name_input.fill(name)
+        modal.emails_input.fill("nobody_e2e@example.com")
+
+        modal.submit_button.click()
+
+        expect(modal.error).to_contain_text("nobody_e2e@example.com")
+        modal.cancel_button.click()
+        expect(modal.overlay).to_be_hidden()
+        expect(projects.chip(name)).to_have_count(0)
 
 
 # ── MEMBERS ───────────────────────────────────────────────────────────────────
@@ -196,3 +224,15 @@ class TestRealtime:
         modal.remove_member(other_user_email)
 
         expect(other_projects.chip(name)).to_have_count(0)
+
+    def test_member_invited_at_creation_sees_project_without_reload(
+        self, projects: ProjectsPanel, other_user_email: str, other_user_page: Page
+    ):
+        """A user listed while creating the project gets it pushed to their open dashboard."""
+        other_projects = ProjectsPanel(other_user_page)
+        expect(other_projects.live_status).to_have_attribute("data-status", "online")
+        name = unique_name()
+
+        projects.add_project(name, member_emails=[other_user_email])
+
+        expect(other_projects.chip(name)).to_be_visible()

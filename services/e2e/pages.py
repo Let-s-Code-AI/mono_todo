@@ -7,6 +7,7 @@ refreshed after the task list re-renders.
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 
 from playwright.sync_api import Locator, Page, Response, expect
 
@@ -182,6 +183,8 @@ class ProjectModal:
         self.root = page.locator(".modal")
         self.overlay = page.locator(".modal-overlay")
         self.name_input = self.root.get_by_placeholder("np. Remont mieszkania")
+        self.emails_input = self.root.get_by_placeholder("emaile oddzielone przecinkami")
+        self.error = self.root.locator(".alert-error")
         self.submit_button = self.root.get_by_role("button", name="Utwórz")
         self.cancel_button = self.root.get_by_role("button", name="Anuluj")
 
@@ -239,10 +242,12 @@ class ProjectsPanel:
         expect(modal.root).to_be_visible()
         return modal
 
-    def add_project(self, name: str) -> Locator:
-        """Creates a project through the modal and returns its chip."""
+    def add_project(self, name: str, member_emails: Sequence[str] = ()) -> Locator:
+        """Creates a project through the modal (optionally with members) and returns its chip."""
         modal = self.open_new_project_modal()
         modal.name_input.fill(name)
+        if member_emails:
+            modal.emails_input.fill(", ".join(member_emails))
         modal.submit()
         return self.chip(name)
 
