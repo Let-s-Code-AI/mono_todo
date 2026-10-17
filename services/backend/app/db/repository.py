@@ -67,6 +67,10 @@ class ProjectRepository:
         self.session.refresh(member)
         return member
 
+    def remove_member(self, member: ProjectMember) -> None:
+        self.session.delete(member)
+        self.session.commit()
+
     def list_members(self, project_id: int) -> list[tuple[ProjectMember, User]]:
         """Return (membership, user) pairs for a project, owner first."""
         statement = (

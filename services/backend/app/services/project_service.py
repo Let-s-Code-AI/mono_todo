@@ -1,6 +1,7 @@
 """Business logic layer for projects and project membership."""
 
 from enum import Enum
+from typing import Optional
 
 from app.db.models import Project, ProjectMember, ProjectRole, User
 from app.db.repository import ProjectRepository, UserRepository
@@ -11,9 +12,11 @@ class MemberError(str, Enum):
     """Outcomes of a failed membership operation; the router maps them to HTTP codes."""
 
     PROJECT_NOT_FOUND = "project_not_found"
-    FORBIDDEN = "forbidden"
+    NOT_MEMBER = "not_member"
+    NOT_OWNER = "not_owner"
     USER_NOT_FOUND = "user_not_found"
     ALREADY_MEMBER = "already_member"
+    MEMBER_NOT_FOUND = "member_not_found"
 
 
 class ProjectService:
@@ -47,7 +50,7 @@ class ProjectService:
         if not self.repository.get_by_id(project_id):
             return MemberError.PROJECT_NOT_FOUND
         if not self._is_owner(project_id, actor_id):
-            return MemberError.FORBIDDEN
+            return MemberError.NOT_OWNER
         user = self.user_repository.get_by_email(email)
         if not user:
             return MemberError.USER_NOT_FOUND
@@ -63,5 +66,15 @@ class ProjectService:
         if not self.repository.get_by_id(project_id):
             return MemberError.PROJECT_NOT_FOUND
         if not self.repository.get_member(project_id, actor_id):
-            return MemberError.FORBIDDEN
+            return MemberError.NOT_MEMBER
         return self.repository.list_members(project_id)
+
+    def remove_member(self, project_id: int, user_id: int, actor_id: int) -> Optional[MemberError]:
+        """Remove a user from the project on behalf of `actor_id`. None means success."""
+        if not self.repository.get_by_id(project_id):
+            return MemberError.PROJECT_NOT_FOUND
+        member = self.repository.get_member(project_id, user_id)
+        if not member:
+            return MemberError.MEMBER_NOT_FOUND
+        self.repository.remove_member(member)
+        return None

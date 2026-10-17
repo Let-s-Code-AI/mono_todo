@@ -135,3 +135,17 @@ def test_list_members_as_non_member_returns_403(
     response = other_client.get(f"/projects/{project_id}/members")
 
     assert response.status_code == 403
+
+
+def test_remove_member_as_owner_returns_204_and_removes_from_list(
+    client: TestClient, test_user: User, other_user: User
+) -> None:
+    """Scenario: Owner usuwa członka z projektu."""
+    project_id = _create_project(client)
+    client.post(f"/projects/{project_id}/members", json={"email": other_user.email})
+
+    response = client.delete(f"/projects/{project_id}/members/{other_user.id}")
+
+    assert response.status_code == 204
+    emails = [m["email"] for m in client.get(f"/projects/{project_id}/members").json()]
+    assert emails == [test_user.email]

@@ -132,11 +132,37 @@ def list_members(
     ]
 
 
+@router.delete("/{project_id}/members/{user_id}", status_code=204)
+def remove_member(
+    project_id: int,
+    user_id: int,
+    service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    """
+    Remove a user from a project.
+
+    Args:
+        project_id: Project identifier
+        user_id: Identifier of the user to remove
+        service: Project service dependency
+        current_user: Authenticated user
+
+    Raises:
+        HTTPException: 404 if the project or the membership does not exist
+    """
+    error = service.remove_member(project_id, user_id, actor_id=current_user.id)
+    if error:
+        raise _member_error_to_http(error)
+
+
 _MEMBER_ERRORS: dict[MemberError, tuple[int, str]] = {
     MemberError.PROJECT_NOT_FOUND: (404, "Project not found"),
-    MemberError.FORBIDDEN: (403, "Only the project owner can manage members"),
+    MemberError.NOT_MEMBER: (403, "Not a member of this project"),
+    MemberError.NOT_OWNER: (403, "Only the project owner can manage members"),
     MemberError.USER_NOT_FOUND: (404, "User not found"),
     MemberError.ALREADY_MEMBER: (409, "User is already a member of this project"),
+    MemberError.MEMBER_NOT_FOUND: (404, "User is not a member of this project"),
 }
 
 
