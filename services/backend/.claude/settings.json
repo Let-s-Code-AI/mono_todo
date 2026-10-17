@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./**/*.db)",
+      "Read(./**/*.sqlite)",
+      "Read(./**/*.sqlite3)",
+      "Read(./.venv/**)",
+      "Read(./**/__pycache__/**)",
+      "Read(./htmlcov/**)",
+      "Read(./.coverage)",
+      "Read(./.pytest_cache/**)"
+    ]
+  }
+}

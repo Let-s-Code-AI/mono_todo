@@ -59,7 +59,7 @@ source .venv/bin/activate
 
 info "Installing Python dependencies..."
 pip install --upgrade pip --quiet
-pip install -r requirements.txt --quiet
+pip install -e ".[dev]" --quiet
 ok "Python dependencies installed"
 
 deactivate

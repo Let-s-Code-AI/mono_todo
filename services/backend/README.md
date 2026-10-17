@@ -59,7 +59,6 @@ todo_ai_worshop/
 │   └── test_tasks_api.py      # API endpoint tests
 ├── alembic.ini                 # Alembic configuration
 ├── pyproject.toml              # Project dependencies and config
-├── requirements.txt            # Python dependencies
 └── README.md                   # This file
 ```
 
@@ -75,7 +74,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 3. **Install dependencies**:
 ```bash
-pip install -r requirements.txt
+pip install -e ".[dev]"
 ```
 
 4. **Set up environment variables** (optional):
