@@ -57,6 +57,18 @@ Schemas         app/schemas/task.py            Pydantic models for API I/O
 Config          app/core/config.py             Settings via Pydantic BaseSettings
 ```
 
+Realtime (projects over WebSocket):
+
+```
+WS endpoint     app/api/routers/projects_ws.py  /ws/projects — auth by ?token=, snapshot, commands, push events
+Connections     app/api/realtime.py             ConnectionManager on app.state (set in lifespan), fan-out per user
+Messages        app/schemas/realtime.py         Commands (client→server) and events/replies (server→client)
+```
+
+The WebSocket handler is `async def`; every service call runs through `run_in_threadpool`, and the
+connection's session is `close()`d after each command so a long-lived socket never serves stale rows.
+REST project endpoints stay as they are and do **not** broadcast; the frontend uses the socket only.
+
 FastAPI's dependency injection chain: `get_session → get_task_repository → get_ai_service → get_task_service` — route handlers receive fully composed services.
 
 Layer rules:
@@ -118,3 +130,6 @@ Coverage expectations:
 - `use_ai_priority` query param on `POST /tasks/` controls whether AI prioritizes the task.
 - Endpoints returning user data pass `owner_id=current_user.id`; ownership scoping happens in the router.
 - `create_db_and_tables()` is for dev/test only. Production schema changes go through Alembic.
+- `/ws/projects`: the JWT travels in the `token` query parameter (browsers cannot set headers on a
+  WebSocket handshake); an invalid token closes the socket with code 4401 after accept. Each command
+  carries a `request_id` echoed by `ack` / `members` / `error`; `error.code` is the `MemberError` value.

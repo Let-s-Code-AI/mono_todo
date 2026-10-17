@@ -1,7 +1,5 @@
 """Shared FastAPI dependencies for authentication."""
 
-from typing import Optional
-
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
@@ -15,7 +13,7 @@ from app.db.session import get_session
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
-def get_user_from_token(token: str, session: Session) -> Optional[User]:
+def get_user_from_token(token: str, session: Session) -> User | None:
     """Resolve the user encoded in a JWT; None when the token is invalid or the user is gone."""
     try:
         payload = decode_token(token)

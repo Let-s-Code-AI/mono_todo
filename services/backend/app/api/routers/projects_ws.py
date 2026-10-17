@@ -8,7 +8,6 @@ additionally pushed to every member of the affected project.
 """
 
 import json
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, ValidationError
@@ -231,7 +230,7 @@ def _describe(exc: ValidationError) -> str:
     )
 
 
-def _request_id_of(raw: str) -> Optional[str]:
+def _request_id_of(raw: str) -> str | None:
     """Best-effort `request_id` of a frame that failed validation."""
     try:
         payload = json.loads(raw)

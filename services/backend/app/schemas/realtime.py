@@ -5,7 +5,7 @@ Commands (client → server) carry a `request_id`; the server answers each one w
 member of the affected project.
 """
 
-from typing import Annotated, Literal, Optional, Union
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, TypeAdapter
 
@@ -52,7 +52,7 @@ class RemoveMemberCommand(BaseModel):
 
 
 Command = Annotated[
-    Union[CreateProjectCommand, ListMembersCommand, AddMemberCommand, RemoveMemberCommand],
+    CreateProjectCommand | ListMembersCommand | AddMemberCommand | RemoveMemberCommand,
     Field(discriminator="type"),
 ]
 
@@ -119,6 +119,6 @@ class ErrorMessage(BaseModel):
     """The command with `request_id` failed; `code` is machine-readable."""
 
     type: Literal["error"] = "error"
-    request_id: Optional[str] = None
+    request_id: str | None = None
     code: str
     detail: str

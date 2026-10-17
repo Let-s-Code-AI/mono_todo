@@ -681,8 +681,10 @@ body {
 }
 
 .live-status.live-online::before { background: var(--green); box-shadow: 0 0 6px var(--green); }
-.live-status.live-connecting::before { background: var(--yellow); animation: pulse 1s infinite; }
+.live-status.live-connecting::before { background: var(--yellow); animation: live-pulse 1s infinite; }
 .live-status.live-offline::before { background: var(--red); }
+
+@keyframes live-pulse { 50% { opacity: 0.3; } }
 
 .panel-empty { font-size: 12px; color: var(--text2); }
 

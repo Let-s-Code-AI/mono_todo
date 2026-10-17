@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, createContext, useContext } from 'react'
+import React, { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react'
 import { api } from './api'
 
 // ── Toast context ──────────────────────────────────────────────────────────────
@@ -385,26 +385,20 @@ function ProjectModal({ onSave, onClose }) {
 
 const ROLE_LABEL = { owner: 'Właściciel', member: 'Członek' }
 
-function MembersModal({ project, userEmail, onClose }) {
-  const [members, setMembers] = useState([])
+function MembersModal({ project, members, userEmail, connected, send, onClose }) {
   const [email, setEmail] = useState('')
-  const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState('')
   const toast = useToast()
-  const isOwner = members.some(m => m.role === 'owner' && m.email === userEmail)
+  const loading = members === undefined
+  const isOwner = !loading && members.some(m => m.role === 'owner' && m.email === userEmail)
 
-  const load = useCallback(async () => {
-    try {
-      setMembers(await api.getProjectMembers(project.id))
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }, [project.id])
-
-  useEffect(() => { load() }, [load])
+  // Ask for the member list once the socket is up (and again after every reconnect);
+  // later changes arrive as member_added / member_removed events.
+  useEffect(() => {
+    if (!connected) return
+    send({ type: 'list_members', project_id: project.id }).catch(err => setError(err.message))
+  }, [project.id, connected, send])
 
   async function addMember(e) {
     e.preventDefault()
@@ -412,10 +406,9 @@ function MembersModal({ project, userEmail, onClose }) {
     setAdding(true)
     setError('')
     try {
-      await api.addProjectMember(project.id, email.trim())
+      await send({ type: 'add_member', project_id: project.id, email: email.trim() })
       setEmail('')
       toast('Dodano członka', 'success')
-      load()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -427,9 +420,8 @@ function MembersModal({ project, userEmail, onClose }) {
     if (!confirm(`Usunąć ${member.email} z projektu?`)) return
     setError('')
     try {
-      await api.removeProjectMember(project.id, member.user_id)
+      await send({ type: 'remove_member', project_id: project.id, user_id: member.user_id })
       toast('Usunięto członka', 'success')
-      load()
     } catch (err) {
       setError(err.message)
     }
@@ -533,11 +525,90 @@ function TaskCard({ task, projectName, onEdit, onDelete, onToggle }) {
   )
 }
 
+// ── Projects over WebSocket ───────────────────────────────────────────────────
+const PROJECTS_STATUS_LABEL = { connecting: 'łączenie…', online: 'na żywo', offline: 'offline' }
+
+// Apply `update` to the cached member list of a project; lists not requested yet stay untouched.
+function updateMembers(cache, projectId, update) {
+  const list = cache[projectId]
+  return list ? { ...cache, [projectId]: update(list) } : cache
+}
+
+/**
+ * Keeps the project list (and every member list already requested) in sync with the server.
+ * onMembershipChanged(removedProjectId?) fires when the user gains or loses a project.
+ */
+function useProjectsSocket({ onMembershipChanged, onUnauthorized }) {
+  const [projects, setProjects] = useState([])
+  const [membersByProject, setMembersByProject] = useState({})
+  const [status, setStatus] = useState('connecting')
+  const socketRef = useRef(null)
+  const callbacks = useRef({ onMembershipChanged, onUnauthorized })
+  callbacks.current = { onMembershipChanged, onUnauthorized }
+
+  useEffect(() => {
+    let hasSnapshot = false
+    const socket = api.connectProjects({
+      onStatus: next => {
+        if (next === 'unauthorized') callbacks.current.onUnauthorized()
+        else setStatus(next)
+      },
+      onMessage: msg => {
+        switch (msg.type) {
+          case 'projects':
+            setProjects(msg.projects)
+            // After a reconnect the membership may have changed while we were offline.
+            if (hasSnapshot) callbacks.current.onMembershipChanged()
+            hasSnapshot = true
+            break
+          case 'project_added':
+            setProjects(prev => (prev.some(p => p.id === msg.project.id) ? prev : [...prev, msg.project]))
+            callbacks.current.onMembershipChanged()
+            break
+          case 'project_removed':
+            setProjects(prev => prev.filter(p => p.id !== msg.project_id))
+            setMembersByProject(prev => {
+              const next = { ...prev }
+              delete next[msg.project_id]
+              return next
+            })
+            callbacks.current.onMembershipChanged(msg.project_id)
+            break
+          case 'members':
+            setMembersByProject(prev => ({ ...prev, [msg.project_id]: msg.members }))
+            break
+          case 'member_added':
+            setMembersByProject(prev => updateMembers(prev, msg.project_id,
+              list => [...list.filter(m => m.user_id !== msg.member.user_id), msg.member]))
+            break
+          case 'member_removed':
+            setMembersByProject(prev => updateMembers(prev, msg.project_id,
+              list => list.filter(m => m.user_id !== msg.user_id)))
+            break
+          default:
+            break
+        }
+      },
+    })
+    socketRef.current = socket
+    return () => {
+      socket.close()
+      socketRef.current = null
+    }
+  }, [])
+
+  const send = useCallback(command => {
+    if (!socketRef.current) return Promise.reject(new Error('Brak połączenia z serwerem'))
+    return socketRef.current.send(command)
+  }, [])
+
+  return { projects, membersByProject, status, send }
+}
+
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 function Dashboard({ userEmail, onLogout }) {
   const [tasks, setTasks] = useState([])
   const [categories, setCategories] = useState([])
-  const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null) // null | { type: 'task', task } | { type: 'category' }
   const [filters, setFilters] = useState({ status: '', priority: '', category_id: '', project_id: '', tag: '' })
@@ -573,19 +644,30 @@ function Dashboard({ userEmail, onLogout }) {
 
   useEffect(() => { loadTasks() }, [loadTasks])
 
-  const loadProjects = useCallback(async () => {
-    try {
-      setProjects(await api.getProjects())
-    } catch (err) {
-      toast(err.message, 'error')
-    }
-  }, [])
+  // Projects live over WebSocket: a snapshot on connect, then push events.
+  const { projects, membersByProject, status: projectsStatus, send: sendProjectCommand } = useProjectsSocket({
+    onMembershipChanged: removedProjectId => {
+      // Losing the selected project: clearing the filter reloads the list by itself.
+      if (removedProjectId !== undefined && filters.project_id == removedProjectId) {
+        setFilter('project_id', '')
+        return
+      }
+      loadTasks()
+    },
+    onUnauthorized: () => {
+      toast('Sesja wygasła — zaloguj się ponownie', 'error')
+      api.logout()
+      onLogout()
+    },
+  })
 
-  useEffect(() => { loadProjects() }, [loadProjects])
+  // Close the members modal when the user loses access to that project.
+  useEffect(() => {
+    if (modal?.type === 'members' && !projects.some(p => p.id === modal.project.id)) setModal(null)
+  }, [projects, modal])
 
   async function handleSaveProject(name) {
-    const project = await api.createProject(name)
-    setProjects(prev => [...prev, project])
+    await sendProjectCommand({ type: 'create_project', name })
     toast('Projekt utworzony', 'success')
   }
 
@@ -703,7 +785,16 @@ function Dashboard({ userEmail, onLogout }) {
         {/* Projects */}
         <div className="panel">
           <div className="panel-head">
-            <h3>Projekty</h3>
+            <div className="panel-title">
+              <h3>Projekty</h3>
+              <span
+                className={`live-status live-${projectsStatus}`}
+                data-status={projectsStatus}
+                title="Projekty aktualizują się na żywo przez WebSocket"
+              >
+                {PROJECTS_STATUS_LABEL[projectsStatus]}
+              </span>
+            </div>
             <button className="btn btn-ghost btn-sm" onClick={() => setModal({ type: 'project' })}>+ Nowy projekt</button>
           </div>
           {projects.length === 0 ? (
@@ -870,7 +961,14 @@ function Dashboard({ userEmail, onLogout }) {
         <ProjectModal onSave={handleSaveProject} onClose={() => setModal(null)} />
       )}
       {modal?.type === 'members' && (
-        <MembersModal project={modal.project} userEmail={userEmail} onClose={() => setModal(null)} />
+        <MembersModal
+          project={modal.project}
+          members={membersByProject[modal.project.id]}
+          userEmail={userEmail}
+          connected={projectsStatus === 'online'}
+          send={sendProjectCommand}
+          onClose={() => setModal(null)}
+        />
       )}
     </div>
   )

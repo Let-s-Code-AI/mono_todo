@@ -16,14 +16,14 @@ No test framework is configured.
 
 This is a React 18 + Vite SPA for a todo/task management app with AI-assisted priority analysis. The UI is in Polish.
 
-**Backend:** The Vite dev server proxies `/auth`, `/tasks`, and `/categories` to `http://localhost:8000`.
+**Backend:** The Vite dev server proxies `/auth`, `/tasks`, `/categories` and `/projects` to `http://localhost:8000`, and `/ws` (WebSocket) to `ws://localhost:8000`.
 
 ### Source layout
 
 ```
 src/
 ├── main.jsx          # React 18 entry point
-├── App.jsx           # All components (691 lines, single-file architecture)
+├── App.jsx           # All components (single-file architecture)
 ├── api.js            # Centralized API client
 └── styles/index.css  # All styles with CSS variables
 ```
@@ -34,6 +34,8 @@ src/
 - **AuthPage** — login/register tabs
 - **TaskModal** — create/edit form; includes AI priority analysis via `reanalyzePriority()`
 - **CategoryModal** — create category with color picker
+- **ProjectModal / MembersModal** — create a project; list, add and remove members (driven by the projects socket)
+- **useProjectsSocket** — hook owning the live project list, cached member lists and the socket status (`connecting` / `online` / `offline`); fires `onMembershipChanged` so the Dashboard reloads tasks, and `onUnauthorized` (close code 4401) which logs the user out
 - **TaskCard** — task display with priority badges, tags, due date status, AI indicator
 - **Dashboard** — main view; stats bar, category filter panel, toolbar with filters, task grid
 - **App** — root component; manages auth state via localStorage, renders AuthPage or Dashboard
@@ -44,6 +46,7 @@ Token stored in `localStorage` as `token`, sent as `Bearer` header. Functions:
 - Auth: `register`, `login`, `logout`
 - Tasks: `getTasks`, `createTask`, `updateTask`, `deleteTask`, `addTag`, `removeTag`, `reanalyzePriority`, `getUpcomingTasks`
 - Categories: `createCategory`, `deleteCategory`
+- Projects: `connectProjects({ onMessage, onStatus })` — opens `/ws/projects?token=…`, reconnects with exponential backoff (max 30 s), returns `{ send(command) → Promise, close() }`. `send` attaches a `request_id` and resolves on the matching `ack`/`members` reply or rejects on `error` (codes mapped to Polish labels in `WS_ERROR_LABEL`). Projects have no REST calls in the frontend.
 
 ### Styling
 

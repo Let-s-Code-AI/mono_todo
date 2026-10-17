@@ -228,6 +228,7 @@ class ProjectsPanel:
         self.root = page.locator(".panel", has=page.get_by_role("heading", name="Projekty"))
         self.new_project_button = page.get_by_role("button", name="Nowy projekt")
         self.chips = self.root.locator(".project-chip")
+        self.live_status = self.root.locator(".live-status")  # data-status: connecting | online | offline
 
     def chip(self, name: str) -> Locator:
         return self.chips.filter(has_text=name)
