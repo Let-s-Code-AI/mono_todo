@@ -96,7 +96,7 @@ class DashboardPage:
     def __init__(self, page: Page) -> None:
         self.page = page
         self.logout_button = page.get_by_role("button", name="Wyloguj")
-        self.user_label = page.locator(".topbar-user")
+        self.user_label = page.locator(".profile-email")
         self.new_task_button = page.get_by_role("button", name="Nowe zadanie")
         self.all_chip = page.get_by_role("button", name="Wszystkie", exact=True)
         self.overdue_chip = page.locator("[data-filter='overdue']")
@@ -204,7 +204,7 @@ class MembersModal:
         self.add_button = self.root.get_by_role("button", name="Dodaj", exact=True)
         self.rows = self.root.locator(".member-row")
         self.error = self.root.locator(".alert-error")
-        self.close_button = self.root.get_by_role("button", name="Zamknij")
+        self.close_button = self.root.locator(".modal-footer").get_by_role("button", name="Zamknij")
 
     def member_row(self, email: str) -> Locator:
         return self.rows.filter(has_text=email)
@@ -231,7 +231,7 @@ class ProjectsPanel:
         self.root = page.locator(".panel", has=page.get_by_role("heading", name="Projekty"))
         self.new_project_button = page.get_by_role("button", name="Nowy projekt")
         self.chips = self.root.locator(".project-chip")
-        self.live_status = self.root.locator(".live-status")  # data-status: connecting | online | offline
+        self.live_status = page.locator(".live-status")  # topbar chip; data-status: connecting | online | offline
 
     def chip(self, name: str) -> Locator:
         return self.chips.filter(has_text=name)

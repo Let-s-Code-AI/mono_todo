@@ -1,44 +1,86 @@
-# Python
+# ===== Python (backend, e2e, mcp_tool) =====
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
+*$py.class
+*.so
 .Python
 *.egg
 *.egg-info/
-dist/
-build/
 .eggs/
+build/
+dist/
+wheels/
 .venv/
 venv/
 env/
-.env
-*.env
+ENV/
 
-# SQLite
+# Test / lint / type caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.tox/
+
+# Coverage / mutation reports
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+pytest-report.xml
+mutants/
+
+# ===== SQLite =====
 *.db
+*.db-journal
 *.sqlite
 *.sqlite3
 
-# Node / Frontend
+# ===== Node / Frontend (Vite + React) =====
 node_modules/
-dist/
 .npm/
-*.log
+.vite/
+.cache/
+.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# Dev / runtime
+# ===== Playwright / E2E =====
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+.playwright-mcp/
+
+# ===== Env / secrets =====
+.env
+.env.*
+*.env
+!.env.example
+
+# ===== Dev runtime (start.sh) =====
 .dev-pids
 *.pid
+*.log
+logs/
 
-# OS
+# ===== Claude Code (local, per-user) =====
+.claude/settings.local.json
+.claude/*.local.*
+
+# ===== OS =====
 .DS_Store
 Thumbs.db
 
-# IDE
+# ===== IDE / editors =====
 .idea/
 .vscode/
 *.swp
 *.swo
+*~
 
-# Docker
+# ===== Docker =====
 *.override.yml

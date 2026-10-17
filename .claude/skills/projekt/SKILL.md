@@ -39,7 +39,8 @@ Monorepo z trzema serwisami:
 - API calls tylko przez `api.js` — token `Bearer` w nagłówku, przechowywany w `localStorage`
 - Projekty i członkowie chodzą przez WebSocket `/ws/projects?token=…` (`api.connectProjects`, hook `useProjectsSocket` w `App.jsx`); backend: `app/api/routers/projects_ws.py`, protokół w `app/schemas/realtime.py`
 - Język interfejsu: **polski**
-- Ciemny motyw, kolor akcentu `#6366f1`
+- Jasny motyw wg designu z Figma Make: tło „papier” `#f2f0e9`, grafitowy sidebar `#14171f`, kobaltowy hero `#3c46e8`, akcent limonkowy `#c8ff3d`, font Manrope
+- Ikony jako inline SVG (komponent `Icon` w `App.jsx`) — bez emoji i fontów ikon
 
 ---
 

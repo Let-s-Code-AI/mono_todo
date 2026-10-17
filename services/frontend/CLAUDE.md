@@ -36,8 +36,10 @@ src/
 - **CategoryModal** — create category with color picker
 - **ProjectModal / MembersModal** — create a project; list, add and remove members (driven by the projects socket)
 - **useProjectsSocket** — hook owning the live project list, cached member lists and the socket status (`connecting` / `online` / `offline`); fires `onMembershipChanged` so the Dashboard reloads tasks, and `onUnauthorized` (close code 4401) which logs the user out
-- **TaskCard** — task display with priority badges, tags, due date status, AI indicator
-- **Dashboard** — main view; stats bar, category filter panel, toolbar with filters, task grid
+- **TaskCard** — task row with priority badges, tags, due date status, AI indicator
+- **Sidebar** — graphite side panel: saved views (Wszystkie / Do zrobienia / Ukończone / Pilne / Przeterminowane) that map onto the task filters, projects and categories sections, user profile with logout; off-canvas below 1024px
+- **EmptyState** — illustrated "Brak zadań" placeholder inside the task board
+- **Dashboard** — main view; topbar (page title + live socket status chip), hero panel with counters, filter panel (view tabs + status/priority selects), tag search + "Nowe zadanie", task board grouped into "Do zrobienia" / "Ukończone"
 - **App** — root component; manages auth state via localStorage, renders AuthPage or Dashboard
 
 ### API client (api.js)
@@ -50,4 +52,4 @@ Token stored in `localStorage` as `token`, sent as `Bearer` header. Functions:
 
 ### Styling
 
-CSS variables-based dark theme in `index.css`. No CSS framework or preprocessor. Purple accent `#6366f1`. Responsive via media query at ≤600px.
+Light theme ported from the Figma Make design, all in `index.css` with CSS variables. No CSS framework or preprocessor. Palette: paper background `#f2f0e9` with a faint grid, graphite sidebar `#14171f`, cobalt hero `#3c46e8`, lime accent `#c8ff3d`, coral `#ff715b` for errors. Font: Manrope (Google Fonts link in `index.html`). Icons are inline stroke SVGs (`Icon` component in `App.jsx`), no icon font or emoji. Breakpoints: sidebar becomes off-canvas ≤1023px, hero collapses ≤900px, single-column toolbar ≤639px.
