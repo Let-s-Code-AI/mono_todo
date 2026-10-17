@@ -81,6 +81,11 @@ class ProjectRepository:
         )
         return list(self.session.exec(statement).all())
 
+    def member_ids(self, project_id: int) -> list[int]:
+        """Return the ids of every member of a project."""
+        statement = select(ProjectMember.user_id).where(ProjectMember.project_id == project_id)
+        return list(self.session.exec(statement).all())
+
     def get_for_user(self, user_id: int) -> list[Project]:
         """Return projects the user is a member of."""
         statement = (

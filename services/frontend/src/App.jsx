@@ -442,8 +442,14 @@ function CategoryModal({ onSave, onClose }) {
 }
 
 // ── Project modals ────────────────────────────────────────────────────────────
+// Splits "a@x.pl, b@y.pl" (commas, semicolons or whitespace) into unique non-empty emails.
+function parseEmails(text) {
+  return [...new Set(text.split(/[\s,;]+/).filter(Boolean))]
+}
+
 function ProjectModal({ onSave, onClose }) {
   const [name, setName] = useState('')
+  const [emails, setEmails] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -453,7 +459,7 @@ function ProjectModal({ onSave, onClose }) {
     setLoading(true)
     setError('')
     try {
-      await onSave(name.trim())
+      await onSave(name.trim(), parseEmails(emails))
       onClose()
     } catch (err) {
       setError(err.message)
@@ -464,7 +470,7 @@ function ProjectModal({ onSave, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 380 }}>
+      <div className="modal" style={{ maxWidth: 420 }}>
         <div className="modal-header">
           <h2>Nowy projekt</h2>
           <button className="icon-btn" onClick={onClose} aria-label="Zamknij"><Icon name="x" size={16} /></button>
@@ -475,6 +481,11 @@ function ProjectModal({ onSave, onClose }) {
             <div className="form-group">
               <label>Nazwa</label>
               <input value={name} onChange={e => setName(e.target.value)} placeholder="np. Remont mieszkania" autoFocus />
+            </div>
+            <div className="form-group">
+              <label>Zaproś użytkowników</label>
+              <input value={emails} onChange={e => setEmails(e.target.value)} placeholder="emaile oddzielone przecinkami" />
+              <small className="form-hint">Zarejestrowani użytkownicy zostaną od razu dodani jako członkowie.</small>
             </div>
           </form>
         </div>
@@ -668,14 +679,15 @@ function updateMembers(cache, projectId, update) {
 /**
  * Keeps the project list (and every member list already requested) in sync with the server.
  * onMembershipChanged(removedProjectId?) fires when the user gains or loses a project.
+ * onTasksChanged(event) fires when a task the user can see is created, updated or deleted.
  */
-function useProjectsSocket({ onMembershipChanged, onUnauthorized }) {
+function useProjectsSocket({ onMembershipChanged, onTasksChanged, onUnauthorized }) {
   const [projects, setProjects] = useState([])
   const [membersByProject, setMembersByProject] = useState({})
   const [status, setStatus] = useState('connecting')
   const socketRef = useRef(null)
-  const callbacks = useRef({ onMembershipChanged, onUnauthorized })
-  callbacks.current = { onMembershipChanged, onUnauthorized }
+  const callbacks = useRef({ onMembershipChanged, onTasksChanged, onUnauthorized })
+  callbacks.current = { onMembershipChanged, onTasksChanged, onUnauthorized }
 
   useEffect(() => {
     let hasSnapshot = false
@@ -715,6 +727,11 @@ function useProjectsSocket({ onMembershipChanged, onUnauthorized }) {
           case 'member_removed':
             setMembersByProject(prev => updateMembers(prev, msg.project_id,
               list => list.filter(m => m.user_id !== msg.user_id)))
+            break
+          case 'task_created':
+          case 'task_updated':
+          case 'task_deleted':
+            callbacks.current.onTasksChanged(msg)
             break
           default:
             break
@@ -956,6 +973,8 @@ function Dashboard({ userEmail, onLogout }) {
 
   // Projects live over WebSocket: a snapshot on connect, then push events.
   const { projects, membersByProject, status: projectsStatus, send: sendProjectCommand } = useProjectsSocket({
+    // Another member (or another tab) changed a task we can see: refetch with the current filters.
+    onTasksChanged: loadTasks,
     onMembershipChanged: removedProjectId => {
       // Losing the selected project: clearing the filter reloads the list by itself.
       if (removedProjectId !== undefined && filters.project_id == removedProjectId) {
@@ -976,9 +995,12 @@ function Dashboard({ userEmail, onLogout }) {
     if (modal?.type === 'members' && !projects.some(p => p.id === modal.project.id)) setModal(null)
   }, [projects, modal])
 
-  async function handleSaveProject(name) {
-    await sendProjectCommand({ type: 'create_project', name })
-    toast('Projekt utworzony', 'success')
+  async function handleSaveProject(name, memberEmails) {
+    const member_emails = memberEmails.filter(email => email !== userEmail)
+    await sendProjectCommand({ type: 'create_project', name, member_emails })
+    const count = member_emails.length
+    const suffix = count === 1 ? 'członka' : 'członków'
+    toast(count ? `Projekt utworzony, dodano ${count} ${suffix}` : 'Projekt utworzony', 'success')
   }
 
   async function handleSaveTask(id, payload, tags, useAI) {

@@ -5,6 +5,7 @@ Coverage:
   - Members: add an existing user by email, error for unknown email, remove a member
   - Tasks in a project: select project in the task modal → project chip filters the list
   - Realtime: a second user sees the project appear and disappear without reloading (WebSocket push)
+  - Realtime: a task created and completed by one member shows up and turns done for the other
 """
 
 import uuid
@@ -14,7 +15,7 @@ from typing import Callable
 
 from playwright.sync_api import APIRequestContext, BrowserContext, Page, expect
 
-from pages import DashboardPage, ProjectsPanel, TaskModal
+from pages import DONE_CLASS, DashboardPage, ProjectsPanel, TaskModal
 
 TEST_PASSWORD = "testpass123"
 
@@ -236,3 +237,26 @@ class TestRealtime:
         projects.add_project(name, member_emails=[other_user_email])
 
         expect(other_projects.chip(name)).to_be_visible()
+
+    def test_task_changes_reach_other_member_without_reload(
+        self,
+        dashboard: DashboardPage,
+        projects: ProjectsPanel,
+        other_user_email: str,
+        other_user_page: Page,
+    ):
+        """A task created, then completed, by one member appears and turns done for the other."""
+        other_dashboard = DashboardPage(other_user_page)
+        name = unique_name()
+        projects.add_project(name, member_emails=[other_user_email])
+        title = unique_name("Wspólne zadanie")
+
+        modal = dashboard.open_new_task_modal()
+        modal.title_input.fill(title)
+        modal.root.locator(".form-group", has_text="Projekt").locator("select").select_option(label=name)
+        modal.submit()
+        expect(other_dashboard.task_card(title)).to_be_visible()
+
+        dashboard.toggle_task(title)
+
+        expect(other_dashboard.task_card(title)).to_have_class(DONE_CLASS)

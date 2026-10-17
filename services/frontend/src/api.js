@@ -121,6 +121,8 @@ export const api = {
 //                    create_project may carry member_emails: [] — registered users added as members at once
 //   server → client: 'projects' (snapshot), 'project_added', 'project_removed', 'members',
 //                    'member_added', 'member_removed', 'ack', 'error' — replies echo request_id.
+//                    'task_created' | 'task_updated' | 'task_deleted' — a task the user can see
+//                    changed (own or in a shared project); the dashboard reloads its list.
 
 const WS_UNAUTHORIZED = 4401
 const WS_RECONNECT_MAX_MS = 30000

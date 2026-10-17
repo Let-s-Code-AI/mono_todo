@@ -2,7 +2,7 @@
 
 from collections.abc import Iterable
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import Request, WebSocket, WebSocketDisconnect
 
 
 class ConnectionManager:
@@ -39,5 +39,10 @@ class ConnectionManager:
 
 
 def get_connection_manager(websocket: WebSocket) -> ConnectionManager:
-    """Dependency returning the application-wide connection registry."""
+    """Dependency returning the application-wide connection registry (WebSocket routes)."""
     return websocket.app.state.connection_manager
+
+
+def get_http_connection_manager(request: Request) -> ConnectionManager:
+    """Dependency returning the application-wide connection registry (HTTP routes)."""
+    return request.app.state.connection_manager

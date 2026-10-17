@@ -7,8 +7,9 @@ from sqlmodel import Session
 
 from app.api.deps import get_current_admin_user, get_current_user
 from app.api.routers.projects import get_project_repository
+from app.api.task_events import TaskNotifier, get_task_notifier
 from app.core.config import settings
-from app.db.models import Category, Priority, Status, User
+from app.db.models import Category, Priority, Status, Task, User
 from app.db.repository import ProjectRepository, TaskRepository
 from app.db.session import get_session
 from app.schemas.task import (
@@ -98,6 +99,7 @@ async def create_task(
     service: TaskService = Depends(get_task_service),
     session: Session = Depends(get_session),
     project_repository: ProjectRepository = Depends(get_project_repository),
+    notifier: TaskNotifier = Depends(get_task_notifier),
     current_user: User = Depends(get_current_user),
 ) -> TaskResponse:
     """
@@ -109,6 +111,7 @@ async def create_task(
         service: Task service dependency
         session: Database session
         project_repository: Project repository for membership checks
+        notifier: Pushes the change to everyone who can see the task
         current_user: Authenticated user
 
     Returns:
@@ -133,7 +136,9 @@ async def create_task(
         owner_id=current_user.id,
         category_name=category_name,
     )
-    return service.to_response(task)
+    response = service.to_response(task)
+    notifier.created(task, response)
+    return response
 
 
 @router.post("/priority/analyze", response_model=PriorityAnalysisResponse)
@@ -287,6 +292,7 @@ async def update_task(
     task_data: TaskUpdate,
     service: TaskService = Depends(get_task_service),
     session: Session = Depends(get_session),
+    notifier: TaskNotifier = Depends(get_task_notifier),
     current_user: User = Depends(get_current_user),
 ) -> TaskResponse:
     """
@@ -297,6 +303,7 @@ async def update_task(
         task_data: Task update data
         service: Task service dependency
         session: Database session
+        notifier: Pushes the change to everyone who can see the task
         current_user: Authenticated user
 
     Returns:
@@ -313,7 +320,7 @@ async def update_task(
     task = service.update_task(task_id, task_data, owner_id=current_user.id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    return service.to_response(task)
+    return _updated(task, service, notifier)
 
 
 @router.post("/{task_id}/tags", response_model=TaskResponse)
@@ -321,6 +328,7 @@ def add_tag(
     task_id: int,
     tag_data: TagCreate,
     service: TaskService = Depends(get_task_service),
+    notifier: TaskNotifier = Depends(get_task_notifier),
     current_user: User = Depends(get_current_user),
 ) -> TaskResponse:
     """
@@ -330,6 +338,7 @@ def add_tag(
         task_id: Task identifier
         tag_data: Tag to add
         service: Task service dependency
+        notifier: Pushes the change to everyone who can see the task
         current_user: Authenticated user
 
     Returns:
@@ -341,7 +350,7 @@ def add_tag(
     task = service.add_tag(task_id, tag_data.name, owner_id=current_user.id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    return service.to_response(task)
+    return _updated(task, service, notifier)
 
 
 @router.delete("/{task_id}/tags/{tag_name}", response_model=TaskResponse)
@@ -349,6 +358,7 @@ def remove_tag(
     task_id: int,
     tag_name: str,
     service: TaskService = Depends(get_task_service),
+    notifier: TaskNotifier = Depends(get_task_notifier),
     current_user: User = Depends(get_current_user),
 ) -> TaskResponse:
     """
@@ -358,6 +368,7 @@ def remove_tag(
         task_id: Task identifier
         tag_name: Tag to remove
         service: Task service dependency
+        notifier: Pushes the change to everyone who can see the task
         current_user: Authenticated user
 
     Returns:
@@ -369,13 +380,14 @@ def remove_tag(
     task = service.remove_tag(task_id, tag_name, owner_id=current_user.id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    return service.to_response(task)
+    return _updated(task, service, notifier)
 
 
 @router.post("/{task_id}/reanalyze-priority", response_model=TaskResponse)
 async def reanalyze_task_priority(
     task_id: int,
     service: TaskService = Depends(get_task_service),
+    notifier: TaskNotifier = Depends(get_task_notifier),
     current_user: User = Depends(get_current_user),
 ) -> TaskResponse:
     """
@@ -384,6 +396,7 @@ async def reanalyze_task_priority(
     Args:
         task_id: Task identifier
         service: Task service dependency
+        notifier: Pushes the change to everyone who can see the task
         current_user: Authenticated user
 
     Returns:
@@ -395,13 +408,14 @@ async def reanalyze_task_priority(
     updated_task = await service.reanalyze_priority(task_id, owner_id=current_user.id)
     if not updated_task:
         raise HTTPException(status_code=404, detail="Task not found")
-    return service.to_response(updated_task)
+    return _updated(updated_task, service, notifier)
 
 
 @router.delete("/{task_id}", status_code=204)
 def delete_task(
     task_id: int,
     service: TaskService = Depends(get_task_service),
+    notifier: TaskNotifier = Depends(get_task_notifier),
     current_user: User = Depends(get_current_user),
 ) -> None:
     """
@@ -410,11 +424,21 @@ def delete_task(
     Args:
         task_id: Task identifier
         service: Task service dependency
+        notifier: Pushes the change to everyone who could see the task
         current_user: Authenticated user
 
     Raises:
         HTTPException: 404 if task not found or not accessible to the current user
     """
-    deleted = service.delete_task(task_id, owner_id=current_user.id)
-    if not deleted:
+    task = service.get_task(task_id, owner_id=current_user.id)
+    if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+    notifier.deleted(task)  # reads the row before it is gone; sent after the response
+    service.delete_task(task_id, owner_id=current_user.id)
+
+
+def _updated(task: Task, service: TaskService, notifier: TaskNotifier) -> TaskResponse:
+    """Build the response for a changed task and queue its `task_updated` event."""
+    response = service.to_response(task)
+    notifier.updated(task, response)
+    return response

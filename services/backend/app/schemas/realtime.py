@@ -10,6 +10,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field, TypeAdapter, field_validator
 
 from app.schemas.project import MemberResponse, ProjectResponse
+from app.schemas.task import TaskResponse
 
 RequestId = Annotated[str, Field(min_length=1, max_length=64)]
 Email = Annotated[str, Field(max_length=255)]
@@ -120,6 +121,28 @@ class MemberRemoved(BaseModel):
     type: Literal["member_removed"] = "member_removed"
     project_id: int
     user_id: int
+
+
+class TaskCreated(BaseModel):
+    """A task the user can see was created (own task or one in a shared project)."""
+
+    type: Literal["task_created"] = "task_created"
+    task: TaskResponse
+
+
+class TaskUpdated(BaseModel):
+    """A task the user can see changed (fields, status, tags or priority)."""
+
+    type: Literal["task_updated"] = "task_updated"
+    task: TaskResponse
+
+
+class TaskDeleted(BaseModel):
+    """A task the user could see was deleted."""
+
+    type: Literal["task_deleted"] = "task_deleted"
+    task_id: int
+    project_id: int | None
 
 
 class Ack(BaseModel):
