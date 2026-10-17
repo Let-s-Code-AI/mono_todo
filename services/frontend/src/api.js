@@ -110,4 +110,25 @@ export const api = {
   deleteCategory(id) {
     return request('DELETE', `/categories/${id}`)
   },
+
+  // Projects
+  getProjects() {
+    return request('GET', '/projects/')
+  },
+
+  createProject(name) {
+    return request('POST', '/projects/', { name })
+  },
+
+  getProjectMembers(projectId) {
+    return request('GET', `/projects/${projectId}/members`)
+  },
+
+  addProjectMember(projectId, email) {
+    return request('POST', `/projects/${projectId}/members`, { email })
+  },
+
+  removeProjectMember(projectId, userId) {
+    return request('DELETE', `/projects/${projectId}/members/${userId}`)
+  },
 }

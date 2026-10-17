@@ -119,11 +119,11 @@ Zasady:
 ## 5. Frontend i E2E
 
 Frontend (`services/frontend`) nie ma testów jednostkowych. Zachowanie UI pokrywasz
-scenariuszem E2E w `services/selenium` (Playwright) jako zewnętrzną pętlą:
+scenariuszem E2E w `services/e2e` (Playwright, page objects w `pages.py`) jako zewnętrzną pętlą:
 
 1. Napisz scenariusz E2E przed zmianą UI (będzie czerwony).
 2. Zaimplementuj UI w `App.jsx` + `api.js`.
-3. Uruchom `./start.sh`, potem `cd services/selenium && pytest test_<modul>.py`.
+3. Uruchom `./start.sh`, potem `cd services/e2e && .venv/bin/pytest test_<modul>.py`.
 
 ---
 

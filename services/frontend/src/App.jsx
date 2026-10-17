@@ -85,13 +85,14 @@ function AuthPage({ onLogin }) {
 }
 
 // ── Task modal ────────────────────────────────────────────────────────────────
-function TaskModal({ task, categories, onSave, onClose }) {
+function TaskModal({ task, categories, projects = [], onSave, onClose }) {
   const isEdit = !!task?.id
   const [title, setTitle] = useState(task?.title ?? '')
   const [description, setDescription] = useState(task?.description ?? '')
   const [priority, setPriority] = useState(task?.priority ?? 'medium')
   const [status, setStatus] = useState(task?.status ?? 'todo')
   const [categoryId, setCategoryId] = useState(task?.category?.id ?? '')
+  const [projectId, setProjectId] = useState(task?.project_id ?? '')
   const [tagInput, setTagInput] = useState('')
   const [tags, setTags] = useState(task?.tags ?? [])
   const dueDateRef = React.useRef(null)
@@ -150,6 +151,7 @@ function TaskModal({ task, categories, onSave, onClose }) {
         priority,
         status,
         category_id: categoryId ? parseInt(categoryId) : null,
+        project_id: projectId ? parseInt(projectId) : null,
         tags,
         due_date: dueDateRef.current?.value || null,
       }
@@ -211,6 +213,19 @@ function TaskModal({ task, categories, onSave, onClose }) {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+          </div>
+          <div className="form-group">
+            <label>Projekt</label>
+            {isEdit ? (
+              <div className="project-static">{projects.find(p => p.id === task.project_id)?.name ?? 'Brak projektu'}</div>
+            ) : (
+              <select value={projectId} onChange={e => setProjectId(e.target.value)}>
+                <option value="">Brak projektu</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            )}
           </div>
           <div className="form-group">
             <label>Tagi (Enter aby dodać)</label>
@@ -320,6 +335,147 @@ function CategoryModal({ onSave, onClose }) {
   )
 }
 
+// ── Project modals ────────────────────────────────────────────────────────────
+function ProjectModal({ onSave, onClose }) {
+  const [name, setName] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit(e) {
+    e.preventDefault()
+    if (!name.trim()) return
+    setLoading(true)
+    setError('')
+    try {
+      await onSave(name.trim())
+      onClose()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 380 }}>
+        <div className="modal-header">
+          <h2>Nowy projekt</h2>
+          <button className="icon-btn" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          {error && <div className="alert alert-error">{error}</div>}
+          <form onSubmit={submit}>
+            <div className="form-group">
+              <label>Nazwa</label>
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="np. Remont mieszkania" autoFocus />
+            </div>
+          </form>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onClose}>Anuluj</button>
+          <button className="btn btn-primary" onClick={submit} disabled={loading || !name.trim()}>
+            {loading ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Utwórz'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const ROLE_LABEL = { owner: 'Właściciel', member: 'Członek' }
+
+function MembersModal({ project, userEmail, onClose }) {
+  const [members, setMembers] = useState([])
+  const [email, setEmail] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [adding, setAdding] = useState(false)
+  const [error, setError] = useState('')
+  const toast = useToast()
+  const isOwner = members.some(m => m.role === 'owner' && m.email === userEmail)
+
+  const load = useCallback(async () => {
+    try {
+      setMembers(await api.getProjectMembers(project.id))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [project.id])
+
+  useEffect(() => { load() }, [load])
+
+  async function addMember(e) {
+    e.preventDefault()
+    if (!email.trim()) return
+    setAdding(true)
+    setError('')
+    try {
+      await api.addProjectMember(project.id, email.trim())
+      setEmail('')
+      toast('Dodano członka', 'success')
+      load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  async function removeMember(member) {
+    if (!confirm(`Usunąć ${member.email} z projektu?`)) return
+    setError('')
+    try {
+      await api.removeProjectMember(project.id, member.user_id)
+      toast('Usunięto członka', 'success')
+      load()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 440 }}>
+        <div className="modal-header">
+          <h2>Członkowie: {project.name}</h2>
+          <button className="icon-btn" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          {error && <div className="alert alert-error">{error}</div>}
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: 20 }}><span className="spinner" /></div>
+          ) : (
+            <div className="member-list">
+              {members.map(m => (
+                <div key={m.user_id} className="member-row">
+                  <span className="member-email">{m.email}</span>
+                  <span className={`member-role member-role-${m.role}`}>{ROLE_LABEL[m.role]}</span>
+                  {isOwner && m.role !== 'owner' && (
+                    <button className="icon-btn danger" title="Usuń z projektu" onClick={() => removeMember(m)}>🗑</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {isOwner && (
+            <form className="member-form" onSubmit={addMember}>
+              <input type="email" placeholder="email użytkownika" value={email} onChange={e => setEmail(e.target.value)} />
+              <button className="btn btn-primary btn-sm" type="submit" disabled={adding || !email.trim()}>
+                {adding ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Dodaj'}
+              </button>
+            </form>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onClose}>Zamknij</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Task card ─────────────────────────────────────────────────────────────────
 function getDueDateStatus(dueDate) {
   if (!dueDate) return null
@@ -333,7 +489,7 @@ function getDueDateStatus(dueDate) {
   return 'ok'
 }
 
-function TaskCard({ task, onEdit, onDelete, onToggle }) {
+function TaskCard({ task, projectName, onEdit, onDelete, onToggle }) {
   const priorityLabel = { low: 'Niski', medium: 'Średni', high: 'Wysoki' }
   const date = new Date(task.created_at).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })
   const dueDateStatus = getDueDateStatus(task.due_date)
@@ -358,6 +514,7 @@ function TaskCard({ task, onEdit, onDelete, onToggle }) {
               {task.category.name}
             </span>
           )}
+          {projectName && <span className="badge badge-project">{projectName}</span>}
           {task.tags?.map(t => <span key={t} className="badge badge-tag">#{t}</span>)}
           {task.ai_override && <span className="ai-badge">✦ AI</span>}
           {dueDateLabel && (
@@ -380,9 +537,10 @@ function TaskCard({ task, onEdit, onDelete, onToggle }) {
 function Dashboard({ userEmail, onLogout }) {
   const [tasks, setTasks] = useState([])
   const [categories, setCategories] = useState([])
+  const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null) // null | { type: 'task', task } | { type: 'category' }
-  const [filters, setFilters] = useState({ status: '', priority: '', category_id: '', tag: '' })
+  const [filters, setFilters] = useState({ status: '', priority: '', category_id: '', project_id: '', tag: '' })
   const [tagSearch, setTagSearch] = useState('')
   const [view, setView] = useState('all') // 'all' | 'overdue' | 'upcoming'
   const toast = useToast()
@@ -414,6 +572,22 @@ function Dashboard({ userEmail, onLogout }) {
   }, [filters, view])
 
   useEffect(() => { loadTasks() }, [loadTasks])
+
+  const loadProjects = useCallback(async () => {
+    try {
+      setProjects(await api.getProjects())
+    } catch (err) {
+      toast(err.message, 'error')
+    }
+  }, [])
+
+  useEffect(() => { loadProjects() }, [loadProjects])
+
+  async function handleSaveProject(name) {
+    const project = await api.createProject(name)
+    setProjects(prev => [...prev, project])
+    toast('Projekt utworzony', 'success')
+  }
 
   async function handleSaveTask(id, payload, tags, useAI) {
     try {
@@ -481,6 +655,7 @@ function Dashboard({ userEmail, onLogout }) {
     }
   }
 
+  const projectNames = Object.fromEntries(projects.map(p => [p.id, p.name]))
   const todo = tasks.filter(t => t.status === 'todo')
   const done = tasks.filter(t => t.status === 'done')
   const high = tasks.filter(t => t.priority === 'high' && t.status === 'todo')
@@ -523,6 +698,36 @@ function Dashboard({ userEmail, onLogout }) {
             <div className="stat-value" style={{ color: 'var(--yellow)' }}>{overdue.length}</div>
             <div className="stat-label">Przeterminowane</div>
           </div>
+        </div>
+
+        {/* Projects */}
+        <div className="panel">
+          <div className="panel-head">
+            <h3>Projekty</h3>
+            <button className="btn btn-ghost btn-sm" onClick={() => setModal({ type: 'project' })}>+ Nowy projekt</button>
+          </div>
+          {projects.length === 0 ? (
+            <p className="panel-empty">Nie należysz jeszcze do żadnego projektu.</p>
+          ) : (
+            <div className="cat-list">
+              <div
+                className={`cat-chip project-chip ${filters.project_id === '' ? 'active' : ''}`}
+                onClick={() => setFilter('project_id', '')}
+              >
+                Wszystkie
+              </div>
+              {projects.map(p => (
+                <div
+                  key={p.id}
+                  className={`cat-chip project-chip ${filters.project_id == p.id ? 'active' : ''}`}
+                  onClick={() => setFilter('project_id', filters.project_id == p.id ? '' : p.id)}
+                >
+                  {p.name}
+                  <button className="cat-del" title="Członkowie" onClick={e => { e.stopPropagation(); setModal({ type: 'members', project: p }) }}>👥</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Categories */}
@@ -613,6 +818,7 @@ function Dashboard({ userEmail, onLogout }) {
                     <TaskCard
                       key={t.id}
                       task={t}
+                      projectName={projectNames[t.project_id]}
                       onEdit={task => setModal({ type: 'task', task })}
                       onDelete={handleDelete}
                       onToggle={handleToggle}
@@ -631,6 +837,7 @@ function Dashboard({ userEmail, onLogout }) {
                     <TaskCard
                       key={t.id}
                       task={t}
+                      projectName={projectNames[t.project_id]}
                       onEdit={task => setModal({ type: 'task', task })}
                       onDelete={handleDelete}
                       onToggle={handleToggle}
@@ -648,6 +855,7 @@ function Dashboard({ userEmail, onLogout }) {
         <TaskModal
           task={modal.task}
           categories={categories}
+          projects={projects}
           onSave={handleSaveTask}
           onClose={() => setModal(null)}
         />
@@ -657,6 +865,12 @@ function Dashboard({ userEmail, onLogout }) {
           onSave={handleSaveCategory}
           onClose={() => setModal(null)}
         />
+      )}
+      {modal?.type === 'project' && (
+        <ProjectModal onSave={handleSaveProject} onClose={() => setModal(null)} />
+      )}
+      {modal?.type === 'members' && (
+        <MembersModal project={modal.project} userEmail={userEmail} onClose={() => setModal(null)} />
       )}
     </div>
   )

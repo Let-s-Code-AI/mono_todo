@@ -661,6 +661,68 @@ body {
 }
 .cat-chip .cat-del:hover { color: var(--red); }
 
+/* ── Projects & members ── */
+.panel-empty { font-size: 12px; color: var(--text2); }
+
+.badge-project {
+  background: rgba(59,130,246,0.18);
+  color: #93c5fd;
+}
+.badge-project::before { content: '📁 '; }
+
+.project-static {
+  padding: 10px 14px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text2);
+  font-size: 14px;
+}
+
+.member-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+
+.member-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.member-email {
+  flex: 1;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-role {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text2);
+}
+.member-role-owner { color: var(--accent-h); }
+
+.member-form { display: flex; gap: 8px; }
+
+.member-form input {
+  flex: 1;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 10px 14px;
+  font-size: 14px;
+  outline: none;
+  font-family: inherit;
+}
+.member-form input:focus { border-color: var(--accent); }
+
 /* ── Loading spinner ── */
 .spinner {
   width: 20px; height: 20px;

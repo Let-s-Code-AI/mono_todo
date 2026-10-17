@@ -48,12 +48,13 @@ Playwright (sync API) + `pytest-playwright`. Chromium only, configured in `pytes
 - `logged_in_page` — fresh browser context with the JWT injected via `storage_state`, already on the dashboard. Use the plugin's plain `page` fixture for logged-out scenarios.
 - `browser_context_args` override — 1280×900 viewport, `pl-PL` locale (task cards format dates with `toLocaleDateString('pl-PL')`).
 
-**`pages.py`** — page objects: `AuthPage`, `DashboardPage`, `TaskModal`. All selectors live here. Prefer role/placeholder/title locators (`get_by_role("button", name="Wyloguj")`, `get_by_placeholder("Co chcesz zrobić?")`, `get_by_title("Usuń")`); CSS classes only where the UI gives nothing better (`.task-card`, `.toast`, `.due-date`).
+**`pages.py`** — page objects: `AuthPage`, `DashboardPage`, `TaskModal`, `ProjectsPanel`, `ProjectModal`, `MembersModal`. All selectors live here. Prefer role/placeholder/title locators (`get_by_role("button", name="Wyloguj")`, `get_by_placeholder("Co chcesz zrobić?")`, `get_by_title("Usuń")`); CSS classes only where the UI gives nothing better (`.task-card`, `.toast`, `.due-date`).
 
 **Test files:**
 - `test_auth.py` — registration, login, logout, session persistence
 - `test_tasks.py` — add / edit / delete / toggle status
 - `test_deadlines.py` — due dates, overdue filter, upcoming (7-day) view, AI priority with due date
+- `test_projects.py` — projects panel, members (add by email / remove), tasks filtered by project
 
 ## Key patterns
 
