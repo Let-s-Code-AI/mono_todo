@@ -2,7 +2,6 @@
 
 from datetime import date, datetime, timezone
 from enum import Enum
-from typing import List, Optional
 
 from sqlalchemy import Column
 from sqlalchemy.types import JSON
@@ -34,7 +33,7 @@ class ProjectRole(str, Enum):
 class User(SQLModel, table=True):
     """User database model."""
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     email: str = Field(unique=True, index=True, max_length=255)
     hashed_password: str
     is_admin: bool = Field(default=False)
@@ -44,7 +43,7 @@ class User(SQLModel, table=True):
 class Project(SQLModel, table=True):
     """Project database model: a shared workspace owned by one user."""
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     name: str = Field(max_length=100)
     owner_id: int = Field(foreign_key="user.id", index=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -61,26 +60,26 @@ class ProjectMember(SQLModel, table=True):
 class Category(SQLModel, table=True):
     """Task category database model."""
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     name: str = Field(unique=True, index=True, max_length=100)
-    color: Optional[str] = Field(default=None, max_length=20)
+    color: str | None = Field(default=None, max_length=20)
 
 
 class Task(SQLModel, table=True):
     """Task database model."""
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     title: str = Field(max_length=200)
-    description: Optional[str] = Field(default=None, max_length=1000)
+    description: str | None = Field(default=None, max_length=1000)
     priority: Priority = Field(default=Priority.MEDIUM)
-    priority_reason: Optional[str] = Field(default=None, max_length=500)
+    priority_reason: str | None = Field(default=None, max_length=500)
     status: Status = Field(default=Status.TODO)
-    owner_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
-    project_id: Optional[int] = Field(default=None, foreign_key="project.id", index=True)
-    category_id: Optional[int] = Field(default=None, foreign_key="category.id", index=True)
-    tags: Optional[List] = Field(default=None, sa_column=Column(JSON))
+    owner_id: int | None = Field(default=None, foreign_key="user.id", index=True)
+    project_id: int | None = Field(default=None, foreign_key="project.id", index=True)
+    category_id: int | None = Field(default=None, foreign_key="category.id", index=True)
+    tags: list | None = Field(default=None, sa_column=Column(JSON))
     ai_override: bool = Field(default=False)
-    due_date: Optional[date] = Field(default=None)
+    due_date: date | None = Field(default=None)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -88,10 +87,10 @@ class Task(SQLModel, table=True):
 class TaskHistory(SQLModel, table=True):
     """One recorded change of a single task field."""
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     task_id: int = Field(foreign_key="task.id", index=True)
-    changed_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    changed_by_id: int | None = Field(default=None, foreign_key="user.id")
     field: str = Field(max_length=50)
-    old_value: Optional[str] = Field(default=None)
-    new_value: Optional[str] = Field(default=None)
+    old_value: str | None = Field(default=None)
+    new_value: str | None = Field(default=None)
     changed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

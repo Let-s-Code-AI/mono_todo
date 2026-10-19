@@ -1,7 +1,6 @@
 """Business logic layer for task operations."""
 
 from enum import Enum
-from typing import Optional
 
 from app.db.models import Priority, Status, Task, TaskHistory
 from app.db.repository import TaskRepository
@@ -9,7 +8,7 @@ from app.schemas.task import CategoryResponse, TaskCreate, TaskResponse, TaskUpd
 from app.services.ai_priority_service import AIPriorityService, MockAIPriorityService
 
 
-def _as_text(value: object) -> Optional[str]:
+def _as_text(value: object) -> str | None:
     """Render a field value as text for history storage."""
     if value is None:
         return None
@@ -17,7 +16,7 @@ def _as_text(value: object) -> Optional[str]:
 
 
 def _build_history(
-    task: Task, changes: dict[str, object], changed_by_id: Optional[int]
+    task: Task, changes: dict[str, object], changed_by_id: int | None
 ) -> list[TaskHistory]:
     """Create one history entry per field whose value actually differs."""
     return [
@@ -34,7 +33,7 @@ def _build_history(
 
 
 def _tag_entry(
-    task_id: int, changed_by_id: Optional[int], old_tag: Optional[str], new_tag: Optional[str]
+    task_id: int, changed_by_id: int | None, old_tag: str | None, new_tag: str | None
 ) -> TaskHistory:
     """History entry for a tag added (old_tag is None) or removed (new_tag is None)."""
     return TaskHistory(
@@ -52,7 +51,7 @@ class TaskService:
     def __init__(
         self,
         repository: TaskRepository,
-        ai_service: Optional[AIPriorityService] = None,
+        ai_service: AIPriorityService | None = None,
     ) -> None:
         """Initialize task service with repository and optional AI service."""
         self.repository = repository
@@ -60,7 +59,7 @@ class TaskService:
 
     def to_response(self, task: Task) -> TaskResponse:
         """Build a TaskResponse, resolving the nested category object."""
-        category: Optional[CategoryResponse] = None
+        category: CategoryResponse | None = None
         if task.category_id:
             cat = self.repository.get_category(task.category_id)
             if cat:
@@ -72,8 +71,8 @@ class TaskService:
         self,
         task_data: TaskCreate,
         use_ai_priority: bool = False,
-        owner_id: Optional[int] = None,
-        category_name: Optional[str] = None,
+        owner_id: int | None = None,
+        category_name: str | None = None,
     ) -> Task:
         """
         Create a new task with optional AI-based prioritization.
@@ -120,7 +119,7 @@ class TaskService:
 
         return self.repository.create(task)
 
-    def get_task(self, task_id: int, owner_id: Optional[int] = None) -> Optional[Task]:
+    def get_task(self, task_id: int, owner_id: int | None = None) -> Task | None:
         """
         Get a task by ID, scoped to a user if provided.
 
@@ -136,14 +135,14 @@ class TaskService:
 
     def get_tasks(
         self,
-        status: Optional[Status] = None,
-        priority: Optional[Priority] = None,
+        status: Status | None = None,
+        priority: Priority | None = None,
         skip: int = 0,
         limit: int = 100,
-        owner_id: Optional[int] = None,
-        category_id: Optional[int] = None,
-        project_id: Optional[int] = None,
-        tag: Optional[str] = None,
+        owner_id: int | None = None,
+        category_id: int | None = None,
+        project_id: int | None = None,
+        tag: str | None = None,
         overdue: bool = False,
     ) -> list[Task]:
         """
@@ -178,7 +177,7 @@ class TaskService:
     def get_upcoming_tasks(
         self,
         days: int = 7,
-        owner_id: Optional[int] = None,
+        owner_id: int | None = None,
         skip: int = 0,
         limit: int = 100,
     ) -> list[Task]:
@@ -197,8 +196,8 @@ class TaskService:
         return self.repository.get_upcoming(days=days, owner_id=owner_id, skip=skip, limit=limit)
 
     def update_task(
-        self, task_id: int, task_data: TaskUpdate, owner_id: Optional[int] = None
-    ) -> Optional[Task]:
+        self, task_id: int, task_data: TaskUpdate, owner_id: int | None = None
+    ) -> Task | None:
         """
         Update an existing task.
 
@@ -222,8 +221,8 @@ class TaskService:
         return self.repository.update(task, history)
 
     def get_task_history(
-        self, task_id: int, owner_id: Optional[int] = None
-    ) -> Optional[list[TaskHistory]]:
+        self, task_id: int, owner_id: int | None = None
+    ) -> list[TaskHistory] | None:
         """
         Get the change history of a task, newest first.
 
@@ -238,7 +237,7 @@ class TaskService:
             return None
         return self.repository.get_history(task_id)
 
-    def add_tag(self, task_id: int, tag: str, owner_id: Optional[int] = None) -> Optional[Task]:
+    def add_tag(self, task_id: int, tag: str, owner_id: int | None = None) -> Task | None:
         """Add a tag to a task (idempotent)."""
         task = self.repository.get_by_id(task_id, owner_id=owner_id)
         if not task:
@@ -251,7 +250,7 @@ class TaskService:
             return self.repository.update(task, history)
         return task
 
-    def remove_tag(self, task_id: int, tag: str, owner_id: Optional[int] = None) -> Optional[Task]:
+    def remove_tag(self, task_id: int, tag: str, owner_id: int | None = None) -> Task | None:
         """Remove a tag from a task."""
         task = self.repository.get_by_id(task_id, owner_id=owner_id)
         if not task:
@@ -263,8 +262,8 @@ class TaskService:
         return self.repository.update(task, history)
 
     async def reanalyze_priority(
-        self, task_id: int, owner_id: Optional[int] = None
-    ) -> Optional[Task]:
+        self, task_id: int, owner_id: int | None = None
+    ) -> Task | None:
         """
         Re-analyze priority for an existing task using AI.
 
@@ -279,7 +278,7 @@ class TaskService:
         if not task:
             return None
 
-        category_name: Optional[str] = None
+        category_name: str | None = None
         if task.category_id is not None:
             category = self.repository.get_category(task.category_id)
             category_name = category.name if category else None
@@ -303,7 +302,7 @@ class TaskService:
             "by_priority": {p.value: priority_counts.get(p, 0) for p in Priority},
         }
 
-    def delete_task(self, task_id: int, owner_id: Optional[int] = None) -> bool:
+    def delete_task(self, task_id: int, owner_id: int | None = None) -> bool:
         """
         Delete a task by ID.
 

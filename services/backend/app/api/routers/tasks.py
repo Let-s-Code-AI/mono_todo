@@ -1,6 +1,5 @@
 """API routes for task operations."""
 
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session
@@ -32,11 +31,11 @@ class TaskListParams:
 
     def __init__(
         self,
-        status: Optional[Status] = Query(default=None, description="Filter by status"),
-        priority: Optional[Priority] = Query(default=None, description="Filter by priority"),
-        category_id: Optional[int] = Query(default=None, description="Filter by category ID"),
-        project_id: Optional[int] = Query(default=None, description="Filter by project ID"),
-        tag: Optional[str] = Query(default=None, description="Filter by tag"),
+        status: Status | None = Query(default=None, description="Filter by status"),
+        priority: Priority | None = Query(default=None, description="Filter by priority"),
+        category_id: int | None = Query(default=None, description="Filter by category ID"),
+        project_id: int | None = Query(default=None, description="Filter by project ID"),
+        tag: str | None = Query(default=None, description="Filter by tag"),
         overdue: bool = Query(
             default=False, description="Return only overdue tasks (past due_date, not done)"
         ),
@@ -74,7 +73,7 @@ def get_task_service(
 
 
 def _ensure_project_member(
-    project_id: Optional[int], user_id: int, project_repository: ProjectRepository
+    project_id: int | None, user_id: int, project_repository: ProjectRepository
 ) -> None:
     """Raise 404 if the project does not exist, 403 if the user is not one of its members."""
     if project_id is None:
@@ -85,7 +84,7 @@ def _ensure_project_member(
         raise HTTPException(status_code=403, detail="Not a member of this project")
 
 
-def _get_category_name(category_id: Optional[int], session: Session) -> Optional[str]:
+def _get_category_name(category_id: int | None, session: Session) -> str | None:
     """Resolve category name from ID."""
     if not category_id:
         return None
