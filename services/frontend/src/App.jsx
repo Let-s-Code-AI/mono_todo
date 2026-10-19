@@ -1050,6 +1050,7 @@ function pluralTasks(n) {
 
 function Dashboard({ userEmail, onLogout }) {
   const [tasks, setTasks] = useState([])
+  const [allTasks, setAllTasks] = useState([]) // unfiltered, for sidebar/hero counters only
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null) // null | { type: 'task', task } | { type: 'category' } | { type: 'project' } | { type: 'members', project } | { type: 'history', task }
@@ -1071,6 +1072,14 @@ function Dashboard({ userEmail, onLogout }) {
         data = await api.getTasks(filters)
       }
       setTasks(data)
+
+      // Sidebar/hero counters always reflect every task, regardless of the
+      // currently active view or filters — reuse `data` when it's already
+      // the unfiltered set, otherwise fetch it separately.
+      const isUnfiltered = view === 'all' && !filters.status && !filters.priority
+        && !filters.category_id && !filters.project_id && !filters.tag
+      setAllTasks(isUnfiltered ? data : await api.getTasks({}))
+
       // Extract categories from tasks
       const cats = {}
       data.forEach(t => { if (t.category) cats[t.category.id] = t.category })
@@ -1188,10 +1197,12 @@ function Dashboard({ userEmail, onLogout }) {
   const projectNames = Object.fromEntries(projects.map(p => [p.id, p.name]))
   const todo = tasks.filter(t => t.status === 'todo')
   const done = tasks.filter(t => t.status === 'done')
-  const high = tasks.filter(t => t.priority === 'high' && t.status === 'todo')
-  const overdue = tasks.filter(t => t.status === 'todo' && getDueDateStatus(t.due_date) === 'overdue')
-  const dueToday = todo.filter(t => isDueToday(t.due_date))
-  const counts = { all: tasks.length, todo: todo.length, done: done.length, high: high.length, overdue: overdue.length }
+  const allTodo = allTasks.filter(t => t.status === 'todo')
+  const allDone = allTasks.filter(t => t.status === 'done')
+  const high = allTasks.filter(t => t.priority === 'high' && t.status === 'todo')
+  const overdue = allTasks.filter(t => t.status === 'todo' && getDueDateStatus(t.due_date) === 'overdue')
+  const dueToday = allTodo.filter(t => isDueToday(t.due_date))
+  const counts = { all: allTasks.length, todo: allTodo.length, done: allDone.length, high: high.length, overdue: overdue.length }
 
   // Which sidebar view the current filters correspond to (null while browsing "Nadchodzące").
   const activeNav = view === 'upcoming' ? null
@@ -1325,8 +1336,8 @@ function Dashboard({ userEmail, onLogout }) {
               </div>
             </div>
             <div className="hero-stats">
-              <div><span>{pad2(todo.length)}</span>Do zrobienia</div>
-              <div><span>{pad2(done.length)}</span>Ukończone</div>
+              <div><span>{pad2(allTodo.length)}</span>Do zrobienia</div>
+              <div><span>{pad2(allDone.length)}</span>Ukończone</div>
               <div><span>{pad2(high.length)}</span>Pilne</div>
             </div>
           </section>
@@ -1335,7 +1346,12 @@ function Dashboard({ userEmail, onLogout }) {
           <section className="filter-panel">
             <div className="filter-row">
               <div className="filter-rail">
-                <button className={`filter-tab ${view === 'all' ? 'active' : ''}`} onClick={() => setView('all')}>Wszystkie</button>
+                <button
+                  className={`filter-tab ${view === 'all' ? 'active' : ''}`}
+                  onClick={() => { setView('all'); setFilters(f => ({ ...f, status: '', priority: '' })) }}
+                >
+                  Wszystkie
+                </button>
                 <button className={`filter-tab filter-tab-alert ${view === 'overdue' ? 'active' : ''}`} data-filter="overdue" onClick={() => setView('overdue')}>
                   <Icon name="alert" size={15} />
                   Przeterminowane

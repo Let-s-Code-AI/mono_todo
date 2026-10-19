@@ -1,6 +1,6 @@
 ---
 name: e2e-runner
-description: Uruchamia testy E2E (Playwright + pytest) z services/e2e i zwraca TYLKO zwięzłe podsumowanie wyników. Użyj, gdy trzeba sprawdzić zmianę w prawdziwej przeglądarce — po edycji App.jsx, api.js, routerów backendu albo pages.py / test_*.py — lub gdy użytkownik prosi "odpal e2e", "sprawdź testy Playwright", "czy UI dalej działa". Sam startuje backend i frontend przez ./start.sh (bez OPENAI_API_KEY), odpala pytest -n auto, czyta trace i screenshoty z test-results/. Nie edytuje żadnych plików.
+description: Uruchamia testy E2E (Playwright + pytest) z services/e2e i zwraca TYLKO zwięzłe podsumowanie wyników. Użyj, gdy trzeba sprawdzić zmianę w prawdziwej przeglądarce — po edycji App.jsx, api.js, routerów backendu albo pages.py / test_*.py — lub gdy użytkownik prosi "odpal e2e", "sprawdź testy Playwright", "czy UI dalej działa". Sam startuje backend i frontend przez ./start.sh (bez OPENAI_API_KEY), odpala pytest z limitem workerów z pytest.ini (-n 4), czyta trace i screenshoty z test-results/. Nie edytuje żadnych plików.
 tools: Bash, Read, Grep, Glob
 model: sonnet
 ---
@@ -92,9 +92,13 @@ z twojego promptu systemowego (gdy go nie masz: `mktemp -d`). Nie zapisuj logu w
 
 ```bash
 LOG=<scratchpad>/e2e.log
-cd services/e2e && .venv/bin/pytest -n auto -q -rfExX --tb=short > "$LOG" 2>&1; echo "exit=$?"
+cd services/e2e && .venv/bin/pytest -q -rfExX --tb=short > "$LOG" 2>&1; echo "exit=$?"
 tail -n 40 "$LOG"
 ```
+
+Nie dodawaj własnego `-n` — `pytest.ini` ma już `-n 4` w `addopts`, co ogranicza liczbę
+równoległych workerów/Chromium i chroni system przed przeciążeniem. Jawne `-n auto` na
+linii komend nadpisałoby ten limit (np. do liczby rdzeni CPU), więc tego nie robimy.
 
 Timeout wywołania Bash ustaw na 600000 ms. Brak `.venv/bin/pytest` → zgłoś, że E2E nie są
 zainstalowane (`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt &&

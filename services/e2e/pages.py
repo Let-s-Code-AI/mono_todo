@@ -122,6 +122,7 @@ class DashboardPage:
         self.overdue_chip = page.locator("[data-filter='overdue']")
         self.upcoming_chip = page.locator("[data-filter='upcoming']")
         self.cards = page.locator(".task-card")
+        self.nav_items = page.locator(".nav-item")
 
     # ── locators ──────────────────────────────────────────────────────────────
 
@@ -156,12 +157,16 @@ class DashboardPage:
         expect(modal.root).to_be_visible()
         return modal
 
-    def add_task(self, title: str, due_date: str | None = None, use_ai: bool = False) -> Locator:
+    def add_task(
+        self, title: str, due_date: str | None = None, priority: str | None = None, use_ai: bool = False
+    ) -> Locator:
         """Adds a task through the modal and returns the locator of its card."""
         modal = self.open_new_task_modal()
         modal.title_input.fill(title)
         if due_date is not None:
             modal.due_date_input.fill(due_date)
+        if priority is not None:
+            modal.priority_select.select_option(priority)
         if use_ai:
             modal.use_ai_checkbox.check()
         modal.submit()
@@ -199,6 +204,24 @@ class DashboardPage:
         ):
             self.all_chip.click()
         expect(self.all_chip).to_have_class(ACTIVE_CLASS)
+
+    def nav_item(self, label: str) -> Locator:
+        """Sidebar nav item ('Wszystkie' / 'Do zrobienia' / 'Ukończone' / 'Pilne' / 'Przeterminowane').
+
+        Its accessible name also includes the count-pill digits (e.g. "Pilne 1"),
+        so it is matched by text instead of get_by_role(..., exact=True).
+        """
+        return self.nav_items.filter(has_text=label)
+
+    def count_pill(self, label: str) -> Locator:
+        """The count-pill badge of a given sidebar nav item."""
+        return self.nav_item(label).locator(".count-pill")
+
+    def show_priority_high(self) -> None:
+        """Sidebar 'Pilne' nav item: filters the list down to high-priority tasks."""
+        with self.page.expect_response(lambda r: "/tasks/" in r.url and "priority=high" in r.url):
+            self.nav_item("Pilne").click()
+        expect(self.nav_item("Pilne")).to_have_class(ACTIVE_CLASS)
 
 
 class ProjectModal:
