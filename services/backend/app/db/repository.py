@@ -1,10 +1,10 @@
 """Repository layer for database operations."""
 
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, Sequence
 
 from sqlalchemy import func, or_, text
-from sqlmodel import Session, select
+from sqlmodel import Session, delete, select
 
 from app.db.models import (
     Category,
@@ -14,6 +14,7 @@ from app.db.models import (
     ProjectRole,
     Status,
     Task,
+    TaskHistory,
     User,
 )
 
@@ -224,13 +225,23 @@ class TaskRepository:
         statement = statement.order_by(Task.due_date).offset(skip).limit(limit)
         return list(self.session.exec(statement).all())
 
-    def update(self, task: Task) -> Task:
-        """Update an existing task."""
+    def update(self, task: Task, history: Sequence[TaskHistory] = ()) -> Task:
+        """Update an existing task and its history entries in one commit."""
         task.updated_at = datetime.now(timezone.utc)
         self.session.add(task)
+        self.session.add_all(history)
         self.session.commit()
         self.session.refresh(task)
         return task
+
+    def get_history(self, task_id: int) -> list[TaskHistory]:
+        """Return the change history of a task, newest first."""
+        statement = (
+            select(TaskHistory)
+            .where(TaskHistory.task_id == task_id)
+            .order_by(TaskHistory.id.desc())
+        )
+        return list(self.session.exec(statement).all())
 
     def count_total(self) -> int:
         """Return total number of tasks."""
@@ -252,6 +263,7 @@ class TaskRepository:
         """Delete a task by ID, optionally scoped to a user (owner or project member)."""
         task = self.get_by_id(task_id, owner_id=owner_id)
         if task:
+            self.session.exec(delete(TaskHistory).where(TaskHistory.task_id == task_id))
             self.session.delete(task)
             self.session.commit()
             return True

@@ -83,3 +83,15 @@ class Task(SQLModel, table=True):
     due_date: Optional[date] = Field(default=None)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class TaskHistory(SQLModel, table=True):
+    """One recorded change of a single task field."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    task_id: int = Field(foreign_key="task.id", index=True)
+    changed_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    field: str = Field(max_length=50)
+    old_value: Optional[str] = Field(default=None)
+    new_value: Optional[str] = Field(default=None)
+    changed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

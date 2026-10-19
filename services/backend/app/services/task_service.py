@@ -1,11 +1,49 @@
 """Business logic layer for task operations."""
 
+from enum import Enum
 from typing import Optional
 
-from app.db.models import Priority, Status, Task
+from app.db.models import Priority, Status, Task, TaskHistory
 from app.db.repository import TaskRepository
 from app.schemas.task import CategoryResponse, TaskCreate, TaskResponse, TaskUpdate
 from app.services.ai_priority_service import AIPriorityService, MockAIPriorityService
+
+
+def _as_text(value: object) -> Optional[str]:
+    """Render a field value as text for history storage."""
+    if value is None:
+        return None
+    return value.value if isinstance(value, Enum) else str(value)
+
+
+def _build_history(
+    task: Task, changes: dict[str, object], changed_by_id: Optional[int]
+) -> list[TaskHistory]:
+    """Create one history entry per field whose value actually differs."""
+    return [
+        TaskHistory(
+            task_id=task.id,
+            changed_by_id=changed_by_id,
+            field=field,
+            old_value=_as_text(getattr(task, field)),
+            new_value=_as_text(value),
+        )
+        for field, value in changes.items()
+        if getattr(task, field) != value
+    ]
+
+
+def _tag_entry(
+    task_id: int, changed_by_id: Optional[int], old_tag: Optional[str], new_tag: Optional[str]
+) -> TaskHistory:
+    """History entry for a tag added (old_tag is None) or removed (new_tag is None)."""
+    return TaskHistory(
+        task_id=task_id,
+        changed_by_id=changed_by_id,
+        field="tags",
+        old_value=old_tag,
+        new_value=new_tag,
+    )
 
 
 class TaskService:
@@ -177,10 +215,28 @@ class TaskService:
             return None
 
         update_data = task_data.model_dump(exclude_unset=True)
+        history = _build_history(task, update_data, changed_by_id=owner_id)
         for field, value in update_data.items():
             setattr(task, field, value)
 
-        return self.repository.update(task)
+        return self.repository.update(task, history)
+
+    def get_task_history(
+        self, task_id: int, owner_id: Optional[int] = None
+    ) -> Optional[list[TaskHistory]]:
+        """
+        Get the change history of a task, newest first.
+
+        Args:
+            task_id: Task identifier
+            owner_id: If set, only return history when this user can access the task
+
+        Returns:
+            History entries, or None if the task is not found or not accessible
+        """
+        if self.get_task(task_id, owner_id=owner_id) is None:
+            return None
+        return self.repository.get_history(task_id)
 
     def add_tag(self, task_id: int, tag: str, owner_id: Optional[int] = None) -> Optional[Task]:
         """Add a tag to a task (idempotent)."""
@@ -191,7 +247,8 @@ class TaskService:
         if tag not in tags:
             tags.append(tag)
             task.tags = tags
-            return self.repository.update(task)
+            history = [_tag_entry(task.id, owner_id, old_tag=None, new_tag=tag)]
+            return self.repository.update(task, history)
         return task
 
     def remove_tag(self, task_id: int, tag: str, owner_id: Optional[int] = None) -> Optional[Task]:
@@ -199,8 +256,11 @@ class TaskService:
         task = self.repository.get_by_id(task_id, owner_id=owner_id)
         if not task:
             return None
+        history: list[TaskHistory] = []
+        if tag in (task.tags or []):
+            history.append(_tag_entry(task.id, owner_id, old_tag=tag, new_tag=None))
         task.tags = [t for t in (task.tags or []) if t != tag]
-        return self.repository.update(task)
+        return self.repository.update(task, history)
 
     async def reanalyze_priority(
         self, task_id: int, owner_id: Optional[int] = None
