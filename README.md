@@ -1,14 +1,14 @@
 # mono_todo
 
-Monorepo dla projektu Todo Workshop składające się z trzech serwisów:
+Monorepo for the Todo Workshop project, made up of three services:
 
-| Katalog | Repo źródłowe | Opis |
+| Directory | Source repo | Description |
 |---|---|---|
 | `services/backend` | `todo_ai_worshop` | FastAPI + SQLite + AI priority |
 | `services/frontend` | `todo_workshop_frontend` | React + Vite |
-| `services/e2e` | `todo_e2e` | Testy E2E (Playwright) |
+| `services/e2e` | `todo_e2e` | E2E tests (Playwright) |
 
-## Struktura
+## Structure
 
 ```
 mono_todo/
@@ -19,7 +19,7 @@ mono_todo/
 └── README.md
 ```
 
-## Aktualizacja subdrzew
+## Updating the subtrees
 
 ```bash
 # Backend
