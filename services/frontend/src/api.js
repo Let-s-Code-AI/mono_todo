@@ -97,6 +97,10 @@ export const api = {
     return request('GET', '/tasks/upcoming', null, { days })
   },
 
+  getTaskHistory(id) {
+    return request('GET', `/tasks/${id}/history`)
+  },
+
   // Categories
   getCategories() {
     // There's no GET /categories in the API, but we'll cache from tasks

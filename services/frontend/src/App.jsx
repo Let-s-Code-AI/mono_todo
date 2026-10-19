@@ -26,6 +26,13 @@ const ICON_PATHS = {
     </>
   ),
   folder: <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5Z" />,
+  history: (
+    <>
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <path d="M3 3v5h5" />
+      <path d="M12 7v5l4 2" />
+    </>
+  ),
   logout: (
     <>
       <path d="M10 17l5-5-5-5M15 12H3" />
@@ -501,6 +508,18 @@ function ProjectModal({ onSave, onClose }) {
 }
 
 const ROLE_LABEL = { owner: 'Właściciel', member: 'Członek' }
+const PRIORITY_LABEL = { low: 'Niski', medium: 'Średni', high: 'Wysoki' }
+const STATUS_LABEL = { todo: 'Do zrobienia', done: 'Zrobione' }
+const HISTORY_FIELD_LABEL = {
+  title: 'Tytuł',
+  description: 'Opis',
+  priority: 'Priorytet',
+  priority_reason: 'Uzasadnienie priorytetu',
+  status: 'Status',
+  category_id: 'Kategoria',
+  due_date: 'Termin',
+  tags: 'Tagi',
+}
 
 function MembersModal({ project, members, userEmail, connected, send, onClose }) {
   const [email, setEmail] = useState('')
@@ -587,6 +606,103 @@ function MembersModal({ project, members, userEmail, connected, send, onClose })
   )
 }
 
+// changed_at arrives as UTC ISO without a timezone suffix — append 'Z' so the
+// Date is parsed as UTC and displayed in local time.
+function formatChangedAt(value) {
+  const iso = /Z$|[+-]\d\d:\d\d$/.test(value) ? value : value + 'Z'
+  return new Date(iso).toLocaleString('pl-PL', {
+    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  })
+}
+
+// One history value ("old" or "new") as display text; null handled by the caller.
+function historyValue(field, value, categories) {
+  if (field === 'priority') return PRIORITY_LABEL[value] ?? value
+  if (field === 'status') return STATUS_LABEL[value] ?? value
+  if (field === 'category_id') {
+    // Deleted categories are no longer in the cache — fall back to the raw id.
+    return categories.find(c => String(c.id) === value)?.name ?? `#${value}`
+  }
+  if (field === 'due_date') {
+    return new Date(value).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' })
+  }
+  return value
+}
+
+// Whole-change phrase, covering null old/new and the add/remove tag convention.
+function describeChange(entry, categories) {
+  const { field, old_value, new_value } = entry
+  if (field === 'tags') {
+    return new_value !== null ? `dodano tag #${new_value}` : `usunięto tag #${old_value}`
+  }
+  const oldText = old_value !== null ? historyValue(field, old_value, categories) : null
+  const newText = new_value !== null ? historyValue(field, new_value, categories) : null
+  if (oldText === null) return `ustawiono: ${newText}`
+  if (newText === null) return `usunięto (było: ${oldText})`
+  return `${oldText} → ${newText}`
+}
+
+function HistoryModal({ task, categories, members, onClose }) {
+  const [entries, setEntries] = useState(undefined) // undefined = loading
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    setEntries(undefined)
+    setError('')
+    api.getTaskHistory(task.id)
+      .then(data => { if (!cancelled) setEntries(data) })
+      .catch(err => {
+        if (!cancelled) setError(err.message === 'Task not found' ? 'Zadanie nie istnieje' : err.message)
+      })
+    return () => { cancelled = true }
+  }, [task.id])
+
+  // Only the id comes back from the API; the member list is a best-effort lookup.
+  function changedBy(id) {
+    if (id === null || id === undefined) return null
+    return members?.find(m => m.user_id === id)?.email ?? `użytkownik #${id}`
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 480 }}>
+        <div className="modal-header">
+          <h2>Historia: {task.title}</h2>
+          <button className="icon-btn" onClick={onClose} aria-label="Zamknij"><Icon name="x" size={16} /></button>
+        </div>
+        <div className="modal-body">
+          {error ? (
+            <div className="alert alert-error">{error}</div>
+          ) : entries === undefined ? (
+            <div className="modal-loading"><span className="spinner" /></div>
+          ) : entries.length === 0 ? (
+            <p className="history-empty">Brak zmian — to zadanie nie było jeszcze edytowane.</p>
+          ) : (
+            <div className="history-list">
+              {entries.map(e => (
+                <div key={e.id} className="history-row">
+                  <div className="history-row-main">
+                    <span className="history-field">{HISTORY_FIELD_LABEL[e.field] ?? e.field}</span>
+                    <span className="history-change">{describeChange(e, categories)}</span>
+                  </div>
+                  <div className="history-meta">
+                    {formatChangedAt(e.changed_at)}
+                    {changedBy(e.changed_by_id) && <> · {changedBy(e.changed_by_id)}</>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onClose}>Zamknij</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Task card ─────────────────────────────────────────────────────────────────
 function getDueDateStatus(dueDate) {
   if (!dueDate) return null
@@ -604,8 +720,7 @@ function isDueToday(dueDate) {
   return !!dueDate && new Date(dueDate).toDateString() === new Date().toDateString()
 }
 
-function TaskCard({ task, projectName, onEdit, onDelete, onToggle }) {
-  const priorityLabel = { low: 'Niski', medium: 'Średni', high: 'Wysoki' }
+function TaskCard({ task, projectName, onEdit, onDelete, onToggle, onHistory }) {
   const date = new Date(task.created_at).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })
   const dueDateStatus = getDueDateStatus(task.due_date)
   const dueDateLabel = task.due_date
@@ -635,7 +750,7 @@ function TaskCard({ task, projectName, onEdit, onDelete, onToggle }) {
         <div className="task-title">{task.title}</div>
         {task.description && <div className="task-desc">{task.description}</div>}
         <div className="task-meta">
-          <span className={`badge badge-priority-${task.priority}`}>{priorityLabel[task.priority]}</span>
+          <span className={`badge badge-priority-${task.priority}`}>{PRIORITY_LABEL[task.priority]}</span>
           {task.category && (
             <span className="badge badge-cat" style={{ background: task.category.color ? task.category.color + '33' : undefined }}>
               {task.category.color && <span className="cat-dot" style={{ background: task.category.color }} />}
@@ -660,6 +775,7 @@ function TaskCard({ task, projectName, onEdit, onDelete, onToggle }) {
         </div>
       </div>
       <div className="task-actions">
+        <button className="icon-btn" onClick={e => { e.stopPropagation(); onHistory(task) }} title="Historia"><Icon name="history" size={15} /></button>
         <button className="icon-btn" onClick={e => { e.stopPropagation(); onEdit(task) }} title="Edytuj"><Icon name="pencil" size={15} /></button>
         <button className="icon-btn danger" onClick={e => { e.stopPropagation(); onDelete(task.id) }} title="Usuń"><Icon name="trash" size={15} /></button>
       </div>
@@ -936,7 +1052,7 @@ function Dashboard({ userEmail, onLogout }) {
   const [tasks, setTasks] = useState([])
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
-  const [modal, setModal] = useState(null) // null | { type: 'task', task } | { type: 'category' } | { type: 'project' } | { type: 'members', project }
+  const [modal, setModal] = useState(null) // null | { type: 'task', task } | { type: 'category' } | { type: 'project' } | { type: 'members', project } | { type: 'history', task }
   const [filters, setFilters] = useState({ status: '', priority: '', category_id: '', project_id: '', tag: '' })
   const [tagSearch, setTagSearch] = useState('')
   const [view, setView] = useState('all') // 'all' | 'overdue' | 'upcoming'
@@ -1133,6 +1249,7 @@ function Dashboard({ userEmail, onLogout }) {
       onEdit={task => setModal({ type: 'task', task })}
       onDelete={handleDelete}
       onToggle={handleToggle}
+      onHistory={task => setModal({ type: 'history', task })}
     />
   )
 
@@ -1329,6 +1446,14 @@ function Dashboard({ userEmail, onLogout }) {
           userEmail={userEmail}
           connected={projectsStatus === 'online'}
           send={sendProjectCommand}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === 'history' && (
+        <HistoryModal
+          task={modal.task}
+          categories={categories}
+          members={membersByProject[modal.task.project_id]}
           onClose={() => setModal(null)}
         />
       )}
