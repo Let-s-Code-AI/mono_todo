@@ -261,9 +261,7 @@ class TaskService:
         task.tags = [t for t in (task.tags or []) if t != tag]
         return self.repository.update(task, history)
 
-    async def reanalyze_priority(
-        self, task_id: int, owner_id: int | None = None
-    ) -> Task | None:
+    async def reanalyze_priority(self, task_id: int, owner_id: int | None = None) -> Task | None:
         """
         Re-analyze priority for an existing task using AI.
 
